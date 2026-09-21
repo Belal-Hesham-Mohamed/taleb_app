@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:taleb/core/networking/interceptors/auth_interceptor.dart';
-import 'package:taleb/core/storage/secure_storage.dart';
+import 'package:taleb/core/storage/secure_storage/secure_storage.dart';
 
 import 'api_config.dart';
 

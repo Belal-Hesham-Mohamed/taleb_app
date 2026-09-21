@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:taleb/core/storage/secure_storage.dart';
+import 'package:taleb/core/storage/secure_storage/secure_storage.dart';
 
 
 class AuthInterceptor extends Interceptor {
