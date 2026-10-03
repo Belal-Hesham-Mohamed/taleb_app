@@ -24,12 +24,16 @@ class AuthInterceptor extends Interceptor {
     }
 
     handler.next(options);
+
   }
 
   @override
   Future<void> onError(
+
     DioException err,
+
     ErrorInterceptorHandler handler,
+    
   ) async {
     // Prevent the same request from entering the refresh flow more than once.
     if (err.requestOptions.extra['authRetry'] == true) {

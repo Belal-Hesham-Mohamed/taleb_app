@@ -1,14 +1,22 @@
 import 'package:dio/dio.dart';
 
 import 'api_config.dart';
+
 import 'interceptors/auth_interceptor.dart';
+
 import '../storage/secure_storage/secure_storage.dart';
 
 class DioConfig {
-  static Dio create({
+
+  static Dio create(
+     {
+
     required ApiConfig config,
+
     required SecureStorage secureStorage,
-  }) {
+
+  }
+   ) {
     final refreshDio = Dio(
       BaseOptions(
         baseUrl: config.baseUrl,
