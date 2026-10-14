@@ -24,16 +24,13 @@ class AuthInterceptor extends Interceptor {
     }
 
     handler.next(options);
-
   }
 
   @override
   Future<void> onError(
-
     DioException err,
 
     ErrorInterceptorHandler handler,
-    
   ) async {
     // Prevent the same request from entering the refresh flow more than once.
     if (err.requestOptions.extra['authRetry'] == true) {
@@ -56,16 +53,12 @@ class AuthInterceptor extends Interceptor {
       // Use a separate Dio instance for refresh.
       final response = await refreshDio.post(
         '/auth/refresh',
-        data: {
-          'refreshToken': refreshToken,
-        },
+        data: {'refreshToken': refreshToken},
       );
 
-      final newAccessToken =
-          response.data['accessToken'] as String;
+      final newAccessToken = response.data['accessToken'] as String;
 
-      final newRefreshToken =
-          response.data['refreshToken'] as String;
+      final newRefreshToken = response.data['refreshToken'] as String;
 
       await secureStorage.saveAccessToken(newAccessToken);
       await secureStorage.saveRefreshToken(newRefreshToken);
@@ -77,8 +70,7 @@ class AuthInterceptor extends Interceptor {
       requestOptions.extra['authRetry'] = true;
 
       // Use new access token.
-      requestOptions.headers['Authorization'] =
-          'Bearer $newAccessToken';
+      requestOptions.headers['Authorization'] = 'Bearer $newAccessToken';
 
       // Retry original request.
       final retryResponse = await dio.fetch(requestOptions);

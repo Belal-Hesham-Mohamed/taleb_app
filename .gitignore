@@ -32,6 +32,9 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/.env.json
+/.env.local
+/.task-appdata/
 
 # Symbolication related
 app.*.symbols
