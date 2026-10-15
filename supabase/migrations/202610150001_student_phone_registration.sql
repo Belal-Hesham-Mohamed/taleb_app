@@ -117,6 +117,11 @@ begin
     if normalized_phone is null then
       raise exception 'A valid student phone number is required';
     end if;
+    -- The education and location catalog references are written here, in the
+    -- trusted signup trigger, because student_profiles has no client INSERT
+    -- or UPDATE policy: RLS grants authenticated users SELECT only. The
+    -- legacy text columns are written alongside them so existing rows and
+    -- older clients keep working.
     insert into public.student_profiles (
       user_id,
       school,
@@ -132,7 +137,13 @@ begin
       education_stage,
       education_type,
       academic_system,
-      academic_track
+      academic_track,
+      education_program_id,
+      education_grade_id,
+      education_track_id,
+      area_id,
+      school_name,
+      school_type
     )
     values (
       new.id,
@@ -149,7 +160,13 @@ begin
       nullif(new.raw_user_meta_data ->> 'education_stage', ''),
       nullif(new.raw_user_meta_data ->> 'education_type', ''),
       nullif(new.raw_user_meta_data ->> 'academic_system', ''),
-      nullif(new.raw_user_meta_data ->> 'academic_track', '')
+      nullif(new.raw_user_meta_data ->> 'academic_track', ''),
+      nullif(new.raw_user_meta_data ->> 'education_program_id', '')::bigint,
+      nullif(new.raw_user_meta_data ->> 'education_grade_id', '')::bigint,
+      nullif(new.raw_user_meta_data ->> 'education_track_id', '')::bigint,
+      nullif(new.raw_user_meta_data ->> 'area_id', '')::bigint,
+      nullif(trim(new.raw_user_meta_data ->> 'school_name'), ''),
+      nullif(trim(new.raw_user_meta_data ->> 'school_type'), '')
     );
   elsif requested_role = 'teacher' then
     insert into public.teacher_profiles (user_id, school)

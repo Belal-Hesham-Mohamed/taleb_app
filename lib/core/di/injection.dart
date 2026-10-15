@@ -25,7 +25,12 @@ Future<void> configureDependencies(AppConfig config) async {
       ..registerLazySingleton<RegistrationRepository>(
         FakeRegistrationRepository.new,
       )
-      ..registerFactory(() => RegistrationCubit(getIt<RegistrationRepository>()))
+      ..registerLazySingleton<CatalogRepository>(
+        () => getIt<RegistrationRepository>() as CatalogRepository,
+      )
+      ..registerFactory(
+        () => RegistrationCubit(getIt<RegistrationRepository>()),
+      )
       ..registerLazySingleton(LocaleRepository.new)
       ..registerFactory(() => LocaleCubit(getIt<LocaleRepository>()));
     return;
@@ -37,6 +42,9 @@ Future<void> configureDependencies(AppConfig config) async {
     )
     ..registerLazySingleton<RegistrationRepository>(
       () => SupabaseRegistrationRepository(getIt<SupabaseClient>()),
+    )
+    ..registerLazySingleton<CatalogRepository>(
+      () => getIt<RegistrationRepository>() as CatalogRepository,
     )
     ..registerFactory(() => AuthCubit(getIt<AuthRepository>()))
     ..registerFactory(() => RegistrationCubit(getIt<RegistrationRepository>()))

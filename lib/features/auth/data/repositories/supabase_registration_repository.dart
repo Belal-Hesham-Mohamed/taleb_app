@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../domain/validation/phone_number.dart';
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/account_role.dart';
 import '../../domain/repositories/registration_repository.dart';
+import '../datasources/catalog_client.dart';
+import '../datasources/supabase_catalog_datasource.dart';
 
 /// Supabase implementation of the student registration contract.
 ///
@@ -14,13 +16,60 @@ import '../../domain/repositories/registration_repository.dart';
 /// trigger on the backend, so a duplicate cannot be created even if two
 /// clients pass the availability check at the same time.
 ///
-/// This class implements [RegistrationRepository] and is only wired for the
-/// student flow. Teacher and guardian flows keep using the email-based
-/// [AuthRepository] and are untouched by this file.
-class SupabaseRegistrationRepository implements RegistrationRepository {
-  SupabaseRegistrationRepository(this._client);
+/// This class implements [RegistrationRepository] and [CatalogRepository]
+/// and is only wired for the student flow. Teacher and guardian flows keep
+/// using the email-based [AuthRepository] and are untouched by this file.
+class SupabaseRegistrationRepository
+    implements RegistrationRepository, CatalogRepository {
+  SupabaseRegistrationRepository(this._client)
+    : _catalog = SupabaseCatalogDatasource(SupabaseCatalogClient(_client));
 
   final SupabaseClient _client;
+  final SupabaseCatalogDatasource _catalog;
+
+  // ---- Catalog ----
+
+  @override
+  Future<List<CatalogOption>> loadPrograms() => _catalog.loadPrograms();
+
+  @override
+  Future<List<CatalogOption>> loadStages() => _catalog.loadStages();
+
+  @override
+  Future<List<GradeOption>> loadGrades({
+    required int programId,
+    required int stageId,
+  }) => _catalog.loadGrades(programId: programId, stageId: stageId);
+
+  @override
+  Future<List<TrackOption>> loadTracks({
+    required int programId,
+    required int stageId,
+    required int gradeNumber,
+  }) => _catalog.loadTracks(
+    programId: programId,
+    stageId: stageId,
+    gradeNumber: gradeNumber,
+  );
+
+  @override
+  Future<List<GradeSubjectOption>> loadGradeSubjects({required int gradeId}) =>
+      _catalog.loadGradeSubjects(gradeId: gradeId);
+
+  @override
+  Future<List<TrackSubjectOption>> loadTrackSubjects({
+    required int trackId,
+    required int gradeId,
+  }) => _catalog.loadTrackSubjects(trackId: trackId, gradeId: gradeId);
+
+  @override
+  Future<List<CatalogOption>> loadGovernorates() => _catalog.loadGovernorates();
+
+  @override
+  Future<List<AreaOption>> loadAreas({required int governorateId}) =>
+      _catalog.loadAreas(governorateId: governorateId);
+
+  // ---- Registration ----
 
   @override
   Future<PhoneAvailability> checkPhoneAvailability(String phone) async {
@@ -66,25 +115,15 @@ class SupabaseRegistrationRepository implements RegistrationRepository {
 
   /// Builds the signup metadata consumed by the `handle_new_auth_user`
   /// trigger. The password is never included.
+  ///
+  /// The profile payload keys match the verified `student_profiles` columns,
+  /// so the trigger persists the relational catalog ids directly.
   Map<String, dynamic> _signupMetadata(StudentRegistrationRequest request) {
-    final draft = request.draft;
     return {
       'role': AccountRole.student.value,
       'full_name': request.fullName,
       'phone': request.phone,
-      'date_of_birth': draft.dateOfBirth.trim(),
-      'gender': draft.gender?.name,
-      'student_id': draft.studentId.trim(),
-      'guardian_phone': normalizePhoneNumber(draft.guardianPhone),
-      'guardian_id': draft.guardianId.trim(),
-      'governorate': draft.governorate.trim(),
-      'area': draft.area.trim(),
-      'education_stage': draft.stage?.name,
-      'education_type': draft.type?.name,
-      'academic_system': draft.system?.name,
-      'grade': draft.grade?.name,
-      'academic_track': draft.track?.name,
-      'school': draft.school.trim(),
+      ...request.draft.toProfilePayload(),
     };
   }
 

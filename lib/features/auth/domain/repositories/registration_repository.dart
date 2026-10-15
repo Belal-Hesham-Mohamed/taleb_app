@@ -1,3 +1,4 @@
+import '../entities/catalog.dart';
 import '../entities/registration_draft.dart';
 
 /// The outcome of asking the trusted backend whether a phone number is free.
@@ -78,6 +79,52 @@ abstract interface class RegistrationRepository {
   /// including a duplicate phone number, so a caller cannot confuse a failed
   /// creation with success.
   Future<void> registerStudent(StudentRegistrationRequest request);
+}
+
+/// The education and location catalog read from the database.
+///
+/// Every method returns the options the database allows for the given parent
+/// selection, so a student can never be offered a grade, track, or area that
+/// belongs to a different program, stage, grade, or governorate.
+abstract interface class CatalogRepository {
+  /// Active education programs, ordered for display.
+  Future<List<CatalogOption>> loadPrograms();
+
+  /// Education stages. The table has no active flag, so every stage is
+  /// returned.
+  Future<List<CatalogOption>> loadStages();
+
+  /// Grades offered by one program and one stage, ordered by grade number.
+  Future<List<GradeOption>> loadGrades({
+    required int programId,
+    required int stageId,
+  });
+
+  /// Tracks offered by one program, one stage, and one grade number.
+  ///
+  /// Empty when no track applies to the selected grade, which is how primary
+  /// and preparatory students are never asked for a specialization.
+  Future<List<TrackOption>> loadTracks({
+    required int programId,
+    required int stageId,
+    required int gradeNumber,
+  });
+
+  /// Subjects common to a grade.
+  Future<List<GradeSubjectOption>> loadGradeSubjects({required int gradeId});
+
+  /// Subjects specific to one track and one grade.
+  Future<List<TrackSubjectOption>> loadTrackSubjects({
+    required int trackId,
+    required int gradeId,
+  });
+
+  /// Active governorates.
+  Future<List<CatalogOption>> loadGovernorates();
+
+  /// Areas belonging to one governorate. An area from another governorate is
+  /// never returned.
+  Future<List<AreaOption>> loadAreas({required int governorateId});
 }
 
 /// Reasons a registration operation can fail, mapped to a localized message

@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/education_path.dart';
 import '../../domain/entities/registration_draft.dart';
 import '../../domain/repositories/registration_repository.dart';
@@ -26,6 +27,14 @@ class RegistrationState {
     this.education = const validation.EducationIssues(),
     this.submitting = false,
     this.failure,
+    this.programs = const [],
+    this.stages = const [],
+    this.grades = const [],
+    this.tracks = const [],
+    this.governorates = const [],
+    this.areas = const [],
+    this.catalogLoading = false,
+    this.catalogError = false,
   });
 
   final RegistrationStep step;
@@ -47,8 +56,27 @@ class RegistrationState {
   /// Set when account creation failed. Success is never emitted on failure.
   final RegistrationFailureKind? failure;
 
+  // ---- Catalog options, loaded from the database ----
+
+  final List<CatalogOption> programs;
+  final List<CatalogOption> stages;
+  final List<GradeOption> grades;
+  final List<TrackOption> tracks;
+  final List<CatalogOption> governorates;
+  final List<AreaOption> areas;
+
+  /// True while a catalog request is in flight.
+  final bool catalogLoading;
+
+  /// Set when a catalog request failed. Options stay empty rather than
+  /// showing stale or invented data.
+  final bool catalogError;
+
   bool get phoneTaken =>
       phoneAvailability.status == PhoneAvailabilityStatus.taken;
+
+  /// Whether the selected education path needs a track selection.
+  bool get requiresTrack => draft.requiresTrack;
 
   RegistrationState copyWith({
     RegistrationStep? step,
@@ -63,6 +91,14 @@ class RegistrationState {
     bool? submitting,
     RegistrationFailureKind? failure,
     bool clearFailure = false,
+    List<CatalogOption>? programs,
+    List<CatalogOption>? stages,
+    List<GradeOption>? grades,
+    List<TrackOption>? tracks,
+    List<CatalogOption>? governorates,
+    List<AreaOption>? areas,
+    bool? catalogLoading,
+    bool? catalogError,
   }) => RegistrationState(
     step: step ?? this.step,
     draft: draft ?? this.draft,
@@ -76,6 +112,14 @@ class RegistrationState {
     education: education ?? this.education,
     submitting: submitting ?? this.submitting,
     failure: clearFailure ? null : (failure ?? this.failure),
+    programs: programs ?? this.programs,
+    stages: stages ?? this.stages,
+    grades: grades ?? this.grades,
+    tracks: tracks ?? this.tracks,
+    governorates: governorates ?? this.governorates,
+    areas: areas ?? this.areas,
+    catalogLoading: catalogLoading ?? this.catalogLoading,
+    catalogError: catalogError ?? this.catalogError,
   );
 }
 
@@ -86,9 +130,20 @@ class RegistrationState {
 /// .taken], and the final creation call rejects duplicates independently.
 /// A failed availability check never allows progression.
 class RegistrationCubit extends Cubit<RegistrationState> {
-  RegistrationCubit(this._repository) : super(const RegistrationState());
+  RegistrationCubit(this._repository, {CatalogRepository? catalog})
+    : _catalog = catalog ?? _tryCatalog(_repository),
+      super(const RegistrationState());
 
   final RegistrationRepository _repository;
+  final CatalogRepository? _catalog;
+
+  /// Incremented on every selection change. A response is applied only when
+  /// its generation still matches, which discards stale results.
+  int _generation = 0;
+
+  /// True when no catalog source is available, so catalog-dependent UI must
+  /// stay disabled rather than crash.
+  bool get hasCatalog => _catalog != null;
 
   void updatePhone(String value) =>
       emit(state.copyWith(draft: state.draft.copyWith(phone: value)));
@@ -155,6 +210,183 @@ class RegistrationCubit extends Cubit<RegistrationState> {
 
   void updateSchool(String value) =>
       emit(state.copyWith(draft: state.draft.copyWith(school: value)));
+
+  // ---- Catalog-driven selection ----
+
+  /// Loads the program, stage, and governorate catalogs.
+  Future<void> loadCatalog() async {
+    final catalog = _catalog;
+    if (catalog == null) return;
+    emit(state.copyWith(catalogLoading: true, catalogError: false));
+    try {
+      final results = await (
+        catalog.loadPrograms(),
+        catalog.loadStages(),
+        catalog.loadGovernorates(),
+      ).wait;
+      emit(
+        state.copyWith(
+          catalogLoading: false,
+          programs: results.$1,
+          stages: results.$2,
+          governorates: results.$3,
+        ),
+      );
+    } catch (_) {
+      emit(state.copyWith(catalogLoading: false, catalogError: true));
+    }
+  }
+
+  /// Selects the education program and clears the dependent selections.
+  void selectProgram(int programId) {
+    _generation++;
+    emit(
+      state.copyWith(
+        draft: state.draft.withProgram(programId),
+        grades: const [],
+        tracks: const [],
+      ),
+    );
+  }
+
+  /// Selects the education stage and clears the dependent selections.
+  void selectStage(int stageId) {
+    _generation++;
+    emit(
+      state.copyWith(
+        draft: state.draft.withStageId(stageId),
+        grades: const [],
+        tracks: const [],
+      ),
+    );
+  }
+
+  /// Selects the grade and clears the track selection.
+  void selectGrade(int gradeId, {int? gradeNumber}) {
+    _generation++;
+    emit(
+      state.copyWith(
+        draft: state.draft.withGradeId(gradeId, gradeNumber: gradeNumber),
+        tracks: const [],
+      ),
+    );
+  }
+
+  /// Selects the track. Passing null clears it.
+  void selectTrack(int? trackId) {
+    emit(state.copyWith(draft: state.draft.withTrackId(trackId)));
+  }
+
+  /// Selects the governorate and clears the area selection.
+  void selectGovernorate(int governorateId) {
+    _generation++;
+    emit(
+      state.copyWith(
+        draft: state.draft.withGovernorate(governorateId),
+        areas: const [],
+      ),
+    );
+  }
+
+  /// Selects the area.
+  void selectArea(int areaId) {
+    emit(state.copyWith(draft: state.draft.withArea(areaId)));
+  }
+
+  void updateSchoolName(String value) =>
+      emit(state.copyWith(draft: state.draft.copyWith(schoolName: value)));
+
+  void updateSchoolType(String value) =>
+      emit(state.copyWith(draft: state.draft.copyWith(schoolType: value)));
+
+  /// Loads the grades for the selected program and stage.
+  ///
+  /// The response is discarded when the selection changed while the request
+  /// was in flight.
+  Future<void> loadGrades() async {
+    final catalog = _catalog;
+    final programId = state.draft.programId;
+    final stageId = state.draft.stageId;
+    if (catalog == null || programId == null || stageId == null) return;
+    final generation = _generation;
+    emit(state.copyWith(catalogLoading: true, catalogError: false));
+    try {
+      final grades = await catalog.loadGrades(
+        programId: programId,
+        stageId: stageId,
+      );
+      if (generation != _generation) return;
+      emit(state.copyWith(catalogLoading: false, grades: grades));
+    } catch (_) {
+      if (generation != _generation) return;
+      emit(state.copyWith(catalogLoading: false, catalogError: true));
+    }
+  }
+
+  /// Loads the tracks for the selected program, stage, and grade.
+  ///
+  /// An empty result means no track applies, which is how primary and
+  /// preparatory students are never asked for a specialization.
+  Future<void> loadTracks() async {
+    final catalog = _catalog;
+    final programId = state.draft.programId;
+    final stageId = state.draft.stageId;
+    final gradeNumber = state.draft.gradeNumber;
+    if (catalog == null ||
+        programId == null ||
+        stageId == null ||
+        gradeNumber == null) {
+      return;
+    }
+    final generation = _generation;
+    emit(state.copyWith(catalogLoading: true, catalogError: false));
+    try {
+      final tracks = await catalog.loadTracks(
+        programId: programId,
+        stageId: stageId,
+        gradeNumber: gradeNumber,
+      );
+      if (generation != _generation) return;
+      emit(state.copyWith(catalogLoading: false, tracks: tracks));
+    } catch (_) {
+      if (generation != _generation) return;
+      emit(state.copyWith(catalogLoading: false, catalogError: true));
+    }
+  }
+
+  /// Loads the areas for the selected governorate.
+  Future<void> loadAreas() async {
+    final catalog = _catalog;
+    final governorateId = state.draft.governorateId;
+    if (catalog == null || governorateId == null) return;
+    final generation = _generation;
+    emit(state.copyWith(catalogLoading: true, catalogError: false));
+    try {
+      final areas = await catalog.loadAreas(governorateId: governorateId);
+      if (generation != _generation) return;
+      emit(state.copyWith(catalogLoading: false, areas: areas));
+    } catch (_) {
+      if (generation != _generation) return;
+      emit(state.copyWith(catalogLoading: false, catalogError: true));
+    }
+  }
+
+  /// Loads the subjects for the selected grade.
+  Future<List<GradeSubjectOption>> loadGradeSubjects() {
+    final gradeId = state.draft.gradeId;
+    if (gradeId == null) return Future.value(const []);
+    return _catalog?.loadGradeSubjects(gradeId: gradeId) ??
+        Future.value(const []);
+  }
+
+  /// Loads the subjects for the selected track and grade.
+  Future<List<TrackSubjectOption>> loadTrackSubjects() {
+    final trackId = state.draft.trackId;
+    final gradeId = state.draft.gradeId;
+    if (trackId == null || gradeId == null) return Future.value(const []);
+    return _catalog?.loadTrackSubjects(trackId: trackId, gradeId: gradeId) ??
+        Future.value(const []);
+  }
 
   /// Validates the credentials step and, when valid, checks availability.
   ///
@@ -307,4 +539,15 @@ class RegistrationCubit extends Cubit<RegistrationState> {
     if (step == RegistrationStep.success) return;
     emit(state.copyWith(step: step));
   }
+}
+
+/// Treats a registration repository as a catalog repository when it provides
+/// both, which the Supabase implementation does. Returns null when it does
+/// not, so a repository without catalog support can still be used for the
+/// parts of the flow that do not need the catalog.
+CatalogRepository? _tryCatalog(RegistrationRepository repository) {
+  if (repository is CatalogRepository) {
+    return repository as CatalogRepository;
+  }
+  return null;
 }
