@@ -43,6 +43,9 @@ abstract class _AuthPageState<T extends StatefulWidget> extends State<T> {
       context.watch<AuthCubit>().state.status == AuthStatus.loading;
   Widget shell({required String title, required Widget child}) => Scaffold(
     appBar: AppBar(
+      leading: context.canPop()
+          ? BackButton(onPressed: () => context.pop())
+          : null,
       title: Text(title),
       actions: [
         TextButton(
@@ -57,7 +60,8 @@ abstract class _AuthPageState<T extends StatefulWidget> extends State<T> {
       ],
     ),
     body: SafeArea(
-      child: Center(
+      child: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
           child: SingleChildScrollView(
@@ -108,11 +112,7 @@ class WelcomePage extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
-                    Icons.auto_stories_rounded,
-                    size: 72,
-                    color: Color(0xFF126B62),
-                  ),
+                  const Icon(Icons.auto_stories_rounded, size: 72),
                   const SizedBox(height: 24),
                   Text(
                     l10n.welcomeTitle,
@@ -164,18 +164,54 @@ class LoadingPage extends StatelessWidget {
       const Scaffold(body: Center(child: CircularProgressIndicator()));
 }
 
-class RoleSelectionPage extends StatelessWidget {
+class RoleSelectionPage extends StatefulWidget {
   const RoleSelectionPage({super.key});
+
+  @override
+  State<RoleSelectionPage> createState() => _RoleSelectionPageState();
+}
+
+class _RoleSelectionPageState extends State<RoleSelectionPage> {
+  AccountRole? _selectedRole;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final roles = <(AccountRole, String, IconData)>[
-      (AccountRole.student, l10n.student, Icons.school_outlined),
-      (AccountRole.teacher, l10n.teacher, Icons.cast_for_education_outlined),
-      (AccountRole.guardian, l10n.guardian, Icons.family_restroom_outlined),
+    final roles = <(AccountRole, String, String, IconData)>[
+      (
+        AccountRole.student,
+        l10n.student,
+        l10n.studentRoleHint,
+        Icons.school_outlined,
+      ),
+      (
+        AccountRole.teacher,
+        l10n.teacher,
+        l10n.teacherRoleHint,
+        Icons.cast_for_education_outlined,
+      ),
+      (
+        AccountRole.guardian,
+        l10n.guardian,
+        l10n.guardianRoleHint,
+        Icons.family_restroom_outlined,
+      ),
     ];
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.chooseRole)),
+      appBar: AppBar(
+        title: Text(l10n.createAccount),
+        actions: [
+          TextButton(
+            onPressed: () {
+              final current = Localizations.localeOf(context).languageCode;
+              context.read<LocaleCubit>().setLanguage(
+                current == 'ar' ? 'en' : 'ar',
+              );
+            },
+            child: Text(l10n.language),
+          ),
+        ],
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
@@ -185,23 +221,90 @@ class RoleSelectionPage extends StatelessWidget {
             children: [
               Text(
                 l10n.chooseRole,
-                style: Theme.of(context).textTheme.headlineSmall,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 20),
-              for (final (role, label, icon) in roles) ...[
-                Card(
-                  child: ListTile(
-                    leading: Icon(icon),
-                    title: Text(label),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.go('/register?role=${role.value}'),
-                  ),
+              for (final (role, label, description, icon) in roles) ...[
+                Builder(
+                  builder: (context) {
+                    final selected = role == _selectedRole;
+                    return Card(
+                      clipBehavior: Clip.antiAlias,
+                      color: selected
+                          ? Theme.of(context).colorScheme.primaryContainer
+                          : null,
+                      shape: RoundedRectangleBorder(
+                        side: BorderSide(
+                          color: selected
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.outlineVariant,
+                          width: selected ? 1.5 : 0.7,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedRole = role),
+                        child: Padding(
+                          padding: const EdgeInsetsDirectional.all(18),
+                          child: Row(
+                            children: [
+                              _roleArtwork(
+                                context,
+                                role,
+                                fallback: icon,
+                                size: 88,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      label,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(description),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                selected
+                                    ? Icons.check_circle_rounded
+                                    : Icons.chevron_right_rounded,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
               ],
               TextButton(
-                onPressed: () => context.go('/sign-in'),
+                onPressed: () => context.push('/sign-in'),
                 child: Text(l10n.signIn),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: _selectedRole == null
+                    ? null
+                    : () => context.push(
+                        _selectedRole == AccountRole.student
+                            ? '/register/student'
+                            : '/register?role=${_selectedRole!.value}',
+                      ),
+                icon: const Icon(Icons.arrow_forward_rounded),
+                label: Text(l10n.continueLabel),
               ),
             ],
           ),
@@ -215,6 +318,30 @@ class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
   @override
   State<SignInPage> createState() => _SignInPageState();
+}
+
+Widget _roleArtwork(
+  BuildContext context,
+  AccountRole role, {
+  required IconData fallback,
+  double size = 88,
+}) {
+  final asset = switch (role) {
+    AccountRole.student => 'assets/student_background.png',
+    AccountRole.teacher => 'assets/teacher_background.png',
+    AccountRole.guardian => 'assets/parents_background.png',
+  };
+  return Image.asset(
+    asset,
+    width: size,
+    height: size,
+    fit: BoxFit.contain,
+    errorBuilder: (_, _, _) => CircleAvatar(
+      radius: size / 2,
+      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+      child: Icon(fallback, color: Theme.of(context).colorScheme.primary),
+    ),
+  );
 }
 
 class _SignInPageState extends _AuthPageState<SignInPage> {
@@ -279,7 +406,7 @@ class _SignInPageState extends _AuthPageState<SignInPage> {
             }
           }),
           TextButton(
-            onPressed: () => context.go('/register'),
+            onPressed: () => context.push('/register'),
             child: Text(l10n.createAccount),
           ),
         ],
@@ -333,6 +460,21 @@ class _RegistrationPageState extends _AuthPageState<RegistrationPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_step == 0) ...[
+            Center(
+              child: _roleArtwork(
+                context,
+                role,
+                fallback: switch (role) {
+                  AccountRole.student => Icons.school_outlined,
+                  AccountRole.teacher => Icons.cast_for_education_outlined,
+                  AccountRole.guardian => Icons.family_restroom_outlined,
+                },
+                size: 148,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             l10n.registerTitle(roleLabel),
             style: Theme.of(context).textTheme.headlineSmall,
@@ -345,6 +487,25 @@ class _RegistrationPageState extends _AuthPageState<RegistrationPage> {
           const SizedBox(height: 8),
           Text(l10n.stepOf(_step + 1, 2)),
           const SizedBox(height: 20),
+          if (_step == 0 && role == AccountRole.teacher) ...[
+            Card(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(l10n.teacherRoleHint)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           if (_step == 0) ...[
             TextFormField(
               controller: _name,
@@ -369,7 +530,26 @@ class _RegistrationPageState extends _AuthPageState<RegistrationPage> {
               (value) => setState(() => _passwordValue = value),
             ),
           ] else ...[
-            Text(l10n.optionalStep),
+            if (role == AccountRole.guardian)
+              Card(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.family_restroom_outlined,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(l10n.guardianSpaceBody)),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Text(l10n.optionalStep),
             if (role != AccountRole.guardian) ...[
               const SizedBox(height: 16),
               TextFormField(
@@ -651,34 +831,78 @@ class HomePage extends StatelessWidget {
             onPressed: () => context.read<AuthCubit>().signOut(),
             icon: const Icon(Icons.logout),
           ),
+          TextButton(
+            onPressed: () {
+              final current = Localizations.localeOf(context).languageCode;
+              context.read<LocaleCubit>().setLanguage(
+                current == 'ar' ? 'en' : 'ar',
+              );
+            },
+            child: Text(l10n.language),
+          ),
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.auto_stories_rounded,
-              size: 56,
-              color: Color(0xFF126B62),
+      body: profile == null
+          ? Center(child: Text(l10n.profileError))
+          : RoleHomeContent(role: profile.role, name: profile.fullName),
+    );
+  }
+}
+
+class RoleHomeContent extends StatelessWidget {
+  const RoleHomeContent({required this.role, this.name, super.key});
+
+  final AccountRole role;
+  final String? name;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final (title, body, icon) = switch (role) {
+      AccountRole.student => (
+        l10n.studentSpaceTitle,
+        l10n.studentSpaceBody,
+        Icons.school_outlined,
+      ),
+      AccountRole.teacher => (
+        l10n.teacherSpaceTitle,
+        l10n.teacherSpaceBody,
+        Icons.cast_for_education_outlined,
+      ),
+      AccountRole.guardian => (
+        l10n.guardianSpaceTitle,
+        l10n.guardianSpaceBody,
+        Icons.family_restroom_outlined,
+      ),
+    };
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 56,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(title, style: Theme.of(context).textTheme.headlineSmall),
+                  if (name != null && name!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(name!),
+                  ],
+                  const SizedBox(height: 12),
+                  Text(body, textAlign: TextAlign.center),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              l10n.homeTitle,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            if (profile != null) Text(profile.fullName),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () {
-                final current = Localizations.localeOf(context).languageCode;
-                context.read<LocaleCubit>().setLanguage(
-                  current == 'ar' ? 'en' : 'ar',
-                );
-              },
-              child: Text(l10n.language),
-            ),
-          ],
+          ),
         ),
       ),
     );

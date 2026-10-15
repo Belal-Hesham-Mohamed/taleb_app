@@ -56,6 +56,11 @@ dev_dependencies:
 flutter:
   generate: true
 
+  assets:
+    - assets/parents_background.png
+    - assets/student_background.png
+    - assets/teacher_background.png
+
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

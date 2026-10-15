@@ -6,11 +6,13 @@ import 'package:go_router/go_router.dart';
 
 import '../core/config/app_config.dart';
 import '../core/di/injection.dart';
+import '../features/auth/domain/repositories/registration_repository.dart';
 import '../features/auth/presentation/cubit/auth_cubit.dart';
 import '../l10n/app_localizations.dart';
 import 'router/auth_redirect_policy.dart';
 import 'locale_cubit.dart';
 import 'pages/auth_pages.dart';
+import 'pages/student_registration_page.dart';
 
 class TalebApp extends StatefulWidget {
   const TalebApp({required this.config, super.key});
@@ -21,9 +23,23 @@ class TalebApp extends StatefulWidget {
 }
 
 class _TalebAppState extends State<TalebApp> {
-  late final AuthCubit _auth = getIt<AuthCubit>()..restore();
+  AuthCubit? _auth;
+
+  @override
+  void initState() {
+    super.initState();
+    // In emulator mode (FAKE_REGISTRATION) no AuthCubit is registered, so
+    // the router runs without auth state and the registration flow is
+    // exercised directly.
+    if (getIt.isRegistered<AuthCubit>()) {
+      final auth = getIt<AuthCubit>()..restore();
+      _auth = auth;
+      _routerRefresh = _AuthRouterRefresh(auth);
+    }
+  }
+
   late final LocaleCubit _locale = getIt<LocaleCubit>()..load();
-  late final _AuthRouterRefresh _routerRefresh = _AuthRouterRefresh(_auth);
+  _AuthRouterRefresh? _routerRefresh;
   late final GoRouter _router = GoRouter(
     initialLocation: '/',
     refreshListenable: _routerRefresh,
@@ -33,10 +49,12 @@ class _TalebAppState extends State<TalebApp> {
           state.uri.queryParameters.containsKey('error') ||
           state.uri.queryParameters.containsKey('error_code');
       if (recoveryError) return '/invalid-link';
-      return resolveAuthRedirect(_auth.state, state.matchedLocation);
+      final auth = _auth;
+      if (auth == null) return null;
+      return resolveAuthRedirect(auth.state, state.matchedLocation);
     },
     routes: [
-      GoRoute(path: '/', builder: (_, _) => const WelcomePage()),
+      GoRoute(path: '/', builder: (_, _) => const RoleSelectionPage()),
       GoRoute(path: '/roles', builder: (_, _) => const RoleSelectionPage()),
       GoRoute(path: '/loading', builder: (_, _) => const LoadingPage()),
       GoRoute(
@@ -48,6 +66,12 @@ class _TalebAppState extends State<TalebApp> {
         path: '/register',
         builder: (_, state) => RegistrationPage(
           role: state.uri.queryParameters['role'] ?? 'student',
+        ),
+      ),
+      GoRoute(
+        path: '/register/student',
+        builder: (_, _) => StudentRegistrationPage(
+          repository: getIt<RegistrationRepository>(),
         ),
       ),
       GoRoute(path: '/reset', builder: (_, _) => const ResetPasswordPage()),
@@ -75,8 +99,8 @@ class _TalebAppState extends State<TalebApp> {
   @override
   void dispose() {
     _router.dispose();
-    _routerRefresh.dispose();
-    _auth.close();
+    _routerRefresh?.dispose();
+    _auth?.close();
     _locale.close();
     super.dispose();
   }
@@ -84,7 +108,7 @@ class _TalebAppState extends State<TalebApp> {
   @override
   Widget build(BuildContext context) => MultiBlocProvider(
     providers: [
-      BlocProvider.value(value: _auth),
+      if (_auth != null) BlocProvider<AuthCubit>.value(value: _auth!),
       BlocProvider.value(value: _locale),
     ],
     child: BlocBuilder<LocaleCubit, Locale?>(
@@ -101,14 +125,43 @@ class _TalebAppState extends State<TalebApp> {
               orElse: () => const Locale('ar'),
             ),
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF126B62),
-            surface: const Color(0xFFF8FAF9),
-          ),
+          colorScheme:
+              ColorScheme.fromSeed(
+                seedColor: const Color(0xFF5147EE),
+                surface: const Color(0xFFFBFAFF),
+              ).copyWith(
+                primary: const Color(0xFF5147EE),
+                onPrimary: Colors.white,
+                primaryContainer: const Color(0xFFE8E6FF),
+                onPrimaryContainer: const Color(0xFF221B78),
+              ),
           useMaterial3: true,
+          filledButtonTheme: FilledButtonThemeData(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF5147EE),
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(56),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+            ),
+          ),
           inputDecorationTheme: const InputDecorationTheme(
-            border: OutlineInputBorder(),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(14)),
+              borderSide: BorderSide(color: Color(0xFFE4E2ED)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(14)),
+              borderSide: BorderSide(color: Color(0xFFE4E2ED)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(14)),
+              borderSide: BorderSide(color: Color(0xFF5147EE), width: 1.5),
+            ),
             filled: true,
+            fillColor: Colors.white,
+            contentPadding: EdgeInsetsDirectional.fromSTEB(18, 16, 18, 16),
           ),
         ),
       ),

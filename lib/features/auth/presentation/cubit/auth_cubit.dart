@@ -8,6 +8,7 @@ import '../../domain/repositories/auth_repository.dart';
 
 enum AuthStatus {
   initial,
+  restoring,
   loading,
   signedOut,
   signedIn,
@@ -56,7 +57,8 @@ class AuthCubit extends Cubit<AuthState> {
         }
       } else if (change == AuthChange.signedIn &&
           (state.status == AuthStatus.signedOut ||
-              state.status == AuthStatus.profileFailure) &&
+              state.status == AuthStatus.profileFailure ||
+              state.status == AuthStatus.needsEmailConfirmation) &&
           !_busy) {
         _loadCurrentProfile();
       }
@@ -95,7 +97,7 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> restore() async {
     if (_busy) return;
     _busy = true;
-    emit(state.copyWith(status: AuthStatus.loading, clearFailure: true));
+    emit(state.copyWith(status: AuthStatus.restoring, clearFailure: true));
     final result = await _repository.restoreSession();
     result.fold(
       (failure) => emit(_profileFailureState(failure)),

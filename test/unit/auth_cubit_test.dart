@@ -34,6 +34,18 @@ void main() {
     expect(cubit.state.profile?.role, AccountRole.student);
   });
 
+  test('distinguishes session restoration from an auth action', () async {
+    final completer = Completer<Either<Failure, UserProfile?>>();
+    repository.restoreCompleter = completer;
+
+    final restoring = cubit.restore();
+    expect(cubit.state.status, AuthStatus.restoring);
+
+    completer.complete(const Right(null));
+    await restoring;
+    expect(cubit.state.status, AuthStatus.signedOut);
+  });
+
   test('maps invalid credentials into the signed-out state', () async {
     repository.signInResult = const Left(
       Failure(FailureKind.invalidCredentials),
@@ -102,6 +114,56 @@ void main() {
     },
   );
 
+  test(
+    'does not submit a second registration while the first is pending',
+    () async {
+      final completer = Completer<Either<Failure, UserProfile?>>();
+      repository.signUpCompleter = completer;
+
+      final first = cubit.signUp(
+        email: 'new@example.com',
+        password: 'long-password',
+        fullName: 'New User',
+        role: AccountRole.student,
+      );
+      await cubit.signUp(
+        email: 'other@example.com',
+        password: 'long-password',
+        fullName: 'Other User',
+        role: AccountRole.student,
+      );
+      expect(repository.signUpCalls, 1);
+
+      completer.complete(const Right(null));
+      await first;
+      expect(cubit.state.status, AuthStatus.needsEmailConfirmation);
+    },
+  );
+
+  test('loads the student profile when email confirmation signs in', () async {
+    const profile = UserProfile(
+      id: 'student-1',
+      email: 'student@example.com',
+      fullName: 'Student',
+      role: AccountRole.student,
+    );
+    repository.signUpResult = const Right(null);
+    repository.currentProfileResult = const Right(profile);
+
+    await cubit.signUp(
+      email: profile.email,
+      password: 'long-password',
+      fullName: profile.fullName,
+      role: profile.role,
+    );
+    expect(cubit.state.status, AuthStatus.needsEmailConfirmation);
+
+    repository.controller.add(AuthChange.signedIn);
+    await Future<void>.delayed(Duration.zero);
+    expect(cubit.state.status, AuthStatus.signedIn);
+    expect(cubit.state.profile?.role, AccountRole.student);
+  });
+
   test('signout failure preserves the active session state', () async {
     const profile = UserProfile(
       id: 'user-1',
@@ -144,6 +206,7 @@ class _FakeAuthRepository implements AuthRepository {
   final controller = StreamController<AuthChange>.broadcast();
   UserProfile? profile;
   Either<Failure, UserProfile?>? restoreResult;
+  Completer<Either<Failure, UserProfile?>>? restoreCompleter;
   Either<Failure, UserProfile>? currentProfileResult;
   Either<Failure, UserProfile> signInResult = const Left(
     Failure(FailureKind.invalidCredentials),
@@ -151,13 +214,15 @@ class _FakeAuthRepository implements AuthRepository {
   Either<Failure, UserProfile?> signUpResult = const Right(null);
   Either<Failure, Unit> signOutResult = const Right(unit);
   Completer<Either<Failure, UserProfile>>? signInCompleter;
+  Completer<Either<Failure, UserProfile?>>? signUpCompleter;
   int signInCalls = 0;
+  int signUpCalls = 0;
 
   @override
   Stream<AuthChange> get authChanges => controller.stream;
   @override
-  Future<Either<Failure, UserProfile?>> restoreSession() async =>
-      restoreResult ?? Right(profile);
+  Future<Either<Failure, UserProfile?>> restoreSession() =>
+      restoreCompleter?.future ?? Future.value(restoreResult ?? Right(profile));
   @override
   Future<Either<Failure, UserProfile>> signIn(String email, String password) {
     signInCalls++;
@@ -172,7 +237,11 @@ class _FakeAuthRepository implements AuthRepository {
     required AccountRole role,
     String? school,
     String? grade,
-  }) async => signUpResult;
+  }) {
+    signUpCalls++;
+    return signUpCompleter?.future ?? Future.value(signUpResult);
+  }
+
   @override
   Future<Either<Failure, Unit>> signOut() async => signOutResult;
   @override

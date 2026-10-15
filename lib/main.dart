@@ -13,13 +13,18 @@ Future<void> main() async {
     return;
   }
 
-  await Supabase.initialize(
-    url: config.supabaseUrl,
-    publishableKey: config.supabasePublishableKey,
-    authOptions: const FlutterAuthClientOptions(
-      authFlowType: AuthFlowType.pkce,
-    ),
-  );
+  // The fake registration flag lets the registration flow be driven without
+  // a reachable backend, but Supabase Auth still needs a client for sign-in
+  // and session restore, so initialize it whenever a URL is present.
+  if (!config.fakeRegistration || config.supabaseUrl.startsWith('https://')) {
+    await Supabase.initialize(
+      url: config.supabaseUrl,
+      publishableKey: config.supabasePublishableKey,
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.pkce,
+      ),
+    );
+  }
   await configureDependencies(config);
   runApp(TalebApp(config: config));
 }

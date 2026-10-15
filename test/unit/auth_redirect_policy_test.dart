@@ -5,6 +5,17 @@ import 'package:taleb/features/auth/domain/entities/user_profile.dart';
 import 'package:taleb/features/auth/presentation/cubit/auth_cubit.dart';
 
 void main() {
+  test('registration stays mounted while account creation is in progress', () {
+    const submitting = AuthState(status: AuthStatus.loading);
+    expect(resolveAuthRedirect(submitting, '/register'), isNull);
+  });
+
+  test('session restoration uses the loading route', () {
+    const restoring = AuthState(status: AuthStatus.restoring);
+    expect(resolveAuthRedirect(restoring, '/'), '/loading');
+    expect(resolveAuthRedirect(restoring, '/loading'), isNull);
+  });
+
   test('students and guardians go to home after sign-in', () {
     for (final role in [AccountRole.student, AccountRole.guardian]) {
       final auth = AuthState(
