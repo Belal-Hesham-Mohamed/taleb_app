@@ -441,7 +441,7 @@ class RegistrationCubit extends Cubit<RegistrationState> {
 
   /// Validates the personal-information step and advances when valid.
   Future<void> submitPersonal() async {
-    final issues = validation.personalIssues(state.draft);
+    final issues = validation.personalIssues(state.draft, areas: state.areas);
     emit(state.copyWith(personal: issues, clearFailure: true));
     if (!issues.isValid) return;
     emit(state.copyWith(step: RegistrationStep.education));
@@ -449,7 +449,11 @@ class RegistrationCubit extends Cubit<RegistrationState> {
 
   /// Validates the educational step and advances to review when valid.
   Future<void> submitEducation() async {
-    final issues = validation.educationIssues(state.draft);
+    final issues = validation.educationIssues(
+      state.draft,
+      availableTracks: state.tracks,
+      tracksLoaded: state.tracks.isNotEmpty || state.draft.gradeId != null,
+    );
     emit(state.copyWith(education: issues, clearFailure: true));
     if (!issues.isValid) return;
     emit(state.copyWith(step: RegistrationStep.review));
@@ -463,8 +467,15 @@ class RegistrationCubit extends Cubit<RegistrationState> {
   Future<void> createAccount() async {
     if (state.submitting) return;
     final credentials = validation.credentialsIssues(state.draft);
-    final personal = validation.personalIssues(state.draft);
-    final education = validation.educationIssues(state.draft);
+    final personal = validation.personalIssues(
+      state.draft,
+      areas: state.areas,
+    );
+    final education = validation.educationIssues(
+      state.draft,
+      availableTracks: state.tracks,
+      tracksLoaded: state.tracks.isNotEmpty || state.draft.gradeId != null,
+    );
     emit(
       state.copyWith(
         credentials: credentials,

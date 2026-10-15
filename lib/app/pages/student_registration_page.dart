@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/auth/domain/entities/education_path.dart';
+import '../../features/auth/domain/entities/catalog.dart';
 import '../../features/auth/domain/entities/registration_draft.dart';
 import '../../features/auth/domain/repositories/registration_repository.dart';
 import '../../features/auth/presentation/cubit/registration_cubit.dart';
@@ -33,7 +33,7 @@ class StudentRegistrationPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-    create: (_) => RegistrationCubit(repository),
+    create: (_) => RegistrationCubit(repository)..loadCatalog(),
     child: const _StudentRegistrationView(),
   );
 }
@@ -438,23 +438,44 @@ class _PersonalStepState extends State<_PersonalStep> {
               onChanged: _cubit.updateGuardianId,
             ),
             const SizedBox(height: 16),
+            if (state.catalogError) ...[
+              _CatalogErrorBanner(
+                message: l10n.catalogLoadError,
+                onRetry: _cubit.loadCatalog,
+              ),
+              const SizedBox(height: 12),
+            ],
             _GovernorateSelector(
+              governorates: state.governorates,
+              loading: state.catalogLoading && state.governorates.isEmpty,
               error: switch (issues.governorate) {
                 'governorateRequired' => l10n.governorateRequired,
                 _ => null,
               },
-              selected: draft.governorate,
-              onSelected: _cubit.updateGovernorate,
+              selectedId: draft.governorateId,
+              onSelected: (gov) {
+                _cubit.selectGovernorate(gov.id);
+                _cubit.updateGovernorate(gov.code ?? gov.nameEn);
+                _cubit.loadAreas();
+              },
             ),
             const SizedBox(height: 16),
             _AreaSelector(
-              governorate: draft.governorate,
+              areas: state.areas,
+              hasGovernorate: draft.governorateId != null,
+              loading: state.catalogLoading &&
+                  state.areas.isEmpty &&
+                  draft.governorateId != null,
               error: switch (issues.area) {
                 'areaRequired' => l10n.areaRequired,
+                'areaInvalid' => l10n.areaInvalid,
                 _ => null,
               },
-              selected: draft.area,
-              onSelected: _cubit.updateArea,
+              selectedId: draft.areaId,
+              onSelected: (area) {
+                _cubit.selectArea(area.id);
+                _cubit.updateArea(area.code ?? area.nameEn);
+              },
             ),
           ],
         );
@@ -562,98 +583,161 @@ class _GenderSelector extends StatelessWidget {
   }
 }
 
-/// Governorate options. These identifiers are stable values persisted with
-/// the profile; the labels are localized.
-const _governorates = <(String, String)>[
-  ('cairo', 'governorateCairo'),
-  ('giza', 'governorateGiza'),
-  ('alexandria', 'governorateAlexandria'),
-  ('dakahlia', 'governorateDakahlia'),
-  ('sharqia', 'governorateSharqia'),
-  ('qalyubia', 'governorateQalyubia'),
-  ('beheira', 'governorateBeheira'),
-  ('gharbia', 'governorateGharbia'),
-];
-
 class _GovernorateSelector extends StatelessWidget {
   const _GovernorateSelector({
+    required this.governorates,
+    required this.loading,
     required this.error,
-    required this.selected,
+    required this.selectedId,
     required this.onSelected,
   });
 
+  final List<CatalogOption> governorates;
+  final bool loading;
   final String? error;
-  final String selected;
-  final ValueChanged<String> onSelected;
+  final int? selectedId;
+  final ValueChanged<CatalogOption> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return DropdownButtonFormField<String>(
-      initialValue: selected.isEmpty ? null : selected,
+    final lang = Localizations.localeOf(context).languageCode;
+    final validSelection = governorates.any((g) => g.id == selectedId);
+    return DropdownButtonFormField<int>(
+      initialValue: validSelection ? selectedId : null,
       decoration: InputDecoration(
         labelText: l10n.governorate,
         prefixIcon: const Icon(Icons.location_on_outlined),
         errorText: error,
+        suffixIcon: loading
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : null,
       ),
       items: [
-        for (final (id, labelKey) in _governorates)
-          DropdownMenuItem(value: id, child: Text(l10n.lookup(labelKey))),
+        for (final gov in governorates)
+          DropdownMenuItem(
+            value: gov.id,
+            child: Text(gov.label(lang)),
+          ),
       ],
-      onChanged: (value) => onSelected(value ?? ''),
+      onChanged: governorates.isEmpty
+          ? null
+          : (value) {
+              if (value != null) {
+                final match = governorates.firstWhere((g) => g.id == value);
+                onSelected(match);
+              }
+            },
     );
   }
 }
 
-/// Areas offered per governorate. Selecting a different governorate clears an
-/// area that no longer belongs to it.
-const _areas = <String, List<(String, String)>>{
-  'cairo': [
-    ('nasr_city', 'areaNasrCity'),
-    ('heliopolis', 'areaHeliopolis'),
-    ('maadi', 'areaMaadi'),
-    ('zamalek', 'areaZamalek'),
-    ('downtown', 'areaDowntown'),
-  ],
-  'giza': [('dokki', 'areaDokki'), ('agouza', 'areaAgouza')],
-};
-
 class _AreaSelector extends StatelessWidget {
   const _AreaSelector({
-    required this.governorate,
+    required this.areas,
+    required this.hasGovernorate,
+    required this.loading,
     required this.error,
-    required this.selected,
+    required this.selectedId,
     required this.onSelected,
   });
 
-  final String governorate;
+  final List<AreaOption> areas;
+  final bool hasGovernorate;
+  final bool loading;
   final String? error;
-  final String selected;
-  final ValueChanged<String> onSelected;
+  final int? selectedId;
+  final ValueChanged<AreaOption> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final areas = _areas[governorate] ?? const [];
-    final validSelection = areas.any((area) => area.$1 == selected);
-    return DropdownButtonFormField<String>(
-      initialValue: validSelection ? selected : null,
+    final lang = Localizations.localeOf(context).languageCode;
+    final validSelection = areas.any((a) => a.id == selectedId);
+    return DropdownButtonFormField<int>(
+      initialValue: validSelection ? selectedId : null,
       decoration: InputDecoration(
         labelText: l10n.area,
         prefixIcon: const Icon(Icons.place_outlined),
         errorText: error,
+        hintText: !hasGovernorate
+            ? null
+            : (areas.isEmpty && !loading ? l10n.noOptionsAvailable : null),
+        suffixIcon: loading
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : null,
       ),
       items: [
-        for (final (id, labelKey) in areas)
-          DropdownMenuItem(value: id, child: Text(l10n.lookup(labelKey))),
+        for (final area in areas)
+          DropdownMenuItem(
+            value: area.id,
+            child: Text(area.label(lang)),
+          ),
       ],
-      onChanged: areas.isEmpty ? null : (value) => onSelected(value ?? ''),
+      onChanged: areas.isEmpty
+          ? null
+          : (value) {
+              if (value != null) {
+                final match = areas.firstWhere((a) => a.id == value);
+                onSelected(match);
+              }
+            },
     );
   }
 }
 
-/// Step 3 — Academic data: stage, conditional type, conditional system,
-/// conditional grade, conditional track, optional school.
+class _CatalogErrorBanner extends StatelessWidget {
+  const _CatalogErrorBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: colorScheme.onErrorContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: colorScheme.onErrorContainer),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            child: Text(l10n.retry),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Step 3 — Academic data: program, stage, grade, track, optional school.
 class _EducationStep extends StatefulWidget {
   const _EducationStep();
 
@@ -669,7 +753,10 @@ class _EducationStepState extends State<_EducationStep> {
   @override
   void initState() {
     super.initState();
-    _school = TextEditingController(text: _cubit.state.draft.school);
+    final draft = _cubit.state.draft;
+    _school = TextEditingController(
+      text: draft.schoolName.isNotEmpty ? draft.schoolName : draft.school,
+    );
   }
 
   @override
@@ -681,23 +768,14 @@ class _EducationStepState extends State<_EducationStep> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final lang = Localizations.localeOf(context).languageCode;
     return BlocBuilder<RegistrationCubit, RegistrationState>(
       builder: (context, state) {
         final draft = state.draft;
         final issues = state.education;
-        final stage = draft.stage;
-        final types = stage == null
-            ? const <EducationType>[]
-            : educationTypesForStage(stage);
-        final systems = draft.type == null
-            ? const <AcademicSystem>[]
-            : academicSystemsForType(draft.type!);
-        final grades = stage == null
-            ? const <StudyGrade>[]
-            : gradesForStage(stage);
-        final tracks = draft.system != null && draft.grade != null
-            ? academicTracksFor(draft.system!, draft.grade!)
-            : null;
+
+        final hasGrades = state.grades.isNotEmpty;
+        final hasTracks = state.tracks.isNotEmpty;
 
         return _StepScaffold(
           stepIndex: 2,
@@ -707,94 +785,134 @@ class _EducationStepState extends State<_EducationStep> {
           onNext: _cubit.submitEducation,
           onPrevious: _cubit.goBack,
           children: [
-            DropdownButtonFormField<EducationalStage>(
-              initialValue: stage,
+            if (state.catalogError) ...[
+              _CatalogErrorBanner(
+                message: l10n.catalogLoadError,
+                onRetry: () {
+                  if (state.programs.isEmpty || state.stages.isEmpty) {
+                    _cubit.loadCatalog();
+                  } else if (draft.programId != null &&
+                      draft.stageId != null &&
+                      state.grades.isEmpty) {
+                    _cubit.loadGrades();
+                  } else if (draft.gradeId != null && state.tracks.isEmpty) {
+                    _cubit.loadTracks();
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+            DropdownButtonFormField<int>(
+              initialValue: state.programs.any((p) => p.id == draft.programId)
+                  ? draft.programId
+                  : null,
+              decoration: InputDecoration(
+                labelText: l10n.educationProgram,
+                prefixIcon: const Icon(Icons.school_outlined),
+                errorText: switch (issues.program) {
+                  'educationProgramRequired' => l10n.educationProgramRequired,
+                  _ => null,
+                },
+              ),
+              items: [
+                for (final item in state.programs)
+                  DropdownMenuItem(
+                    value: item.id,
+                    child: Text(item.label(lang)),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  _cubit.selectProgram(value);
+                  if (draft.stageId != null) {
+                    _cubit.loadGrades();
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int>(
+              initialValue: state.stages.any((s) => s.id == draft.stageId)
+                  ? draft.stageId
+                  : null,
               decoration: InputDecoration(
                 labelText: l10n.educationStage,
-                prefixIcon: const Icon(Icons.school_outlined),
+                prefixIcon: const Icon(Icons.category_outlined),
                 errorText: switch (issues.stage) {
-                  'stageRequired' => l10n.educationStageRequired,
+                  'educationStageRequired' => l10n.educationStageRequired,
                   _ => null,
                 },
               ),
               items: [
-                for (final item in EducationalStage.values)
+                for (final item in state.stages)
                   DropdownMenuItem(
-                    value: item,
-                    child: Text(l10n.stageLabel(item)),
+                    value: item.id,
+                    child: Text(item.label(lang)),
                   ),
               ],
-              onChanged: (value) => _cubit.updateStage(value),
+              onChanged: (value) {
+                if (value != null) {
+                  _cubit.selectStage(value);
+                  if (draft.programId != null) {
+                    _cubit.loadGrades();
+                  }
+                }
+              },
             ),
             const SizedBox(height: 16),
-            if (types.isNotEmpty) ...[
-              DropdownButtonFormField<EducationType>(
-                initialValue: draft.type,
+            if (draft.programId != null && draft.stageId != null) ...[
+              DropdownButtonFormField<int>(
+                initialValue: state.grades.any((g) => g.id == draft.gradeId)
+                    ? draft.gradeId
+                    : null,
                 decoration: InputDecoration(
-                  labelText: l10n.educationType,
-                  prefixIcon: const Icon(Icons.category_outlined),
-                  errorText: switch (issues.type) {
-                    'educationTypeRequired' => l10n.educationTypeRequired,
+                  labelText: l10n.grade,
+                  prefixIcon: const Icon(Icons.grade_outlined),
+                  errorText: switch (issues.grade) {
+                    'gradeRequired' || 'gradeInvalid' => l10n.gradeRequired,
                     _ => null,
                   },
+                  hintText: !hasGrades && !state.catalogLoading
+                      ? l10n.noOptionsAvailable
+                      : null,
+                  suffixIcon: state.catalogLoading && !hasGrades
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : null,
                 ),
                 items: [
-                  for (final item in types)
+                  for (final item in state.grades)
                     DropdownMenuItem(
-                      value: item,
-                      child: Text(l10n.educationTypeLabel(item)),
+                      value: item.id,
+                      child: Text(item.label(lang)),
                     ),
                 ],
-                onChanged: (value) => _cubit.updateType(value),
+                onChanged: hasGrades
+                    ? (value) {
+                        if (value != null) {
+                          final grade =
+                              state.grades.firstWhere((g) => g.id == value);
+                          _cubit.selectGrade(
+                            grade.id,
+                            gradeNumber: grade.gradeNumber,
+                          );
+                          _cubit.loadTracks();
+                        }
+                      }
+                    : null,
               ),
               const SizedBox(height: 16),
             ],
-            if (systems.isNotEmpty) ...[
-              DropdownButtonFormField<AcademicSystem>(
-                initialValue: draft.system,
-                decoration: InputDecoration(
-                  labelText: l10n.academicSystem,
-                  prefixIcon: const Icon(Icons.account_tree_outlined),
-                  errorText: switch (issues.system) {
-                    'academicSystemRequired' => l10n.academicSystemRequired,
-                    _ => null,
-                  },
-                ),
-                items: [
-                  for (final item in systems)
-                    DropdownMenuItem(
-                      value: item,
-                      child: Text(l10n.academicSystemLabel(item)),
-                    ),
-                ],
-                onChanged: (value) => _cubit.updateSystem(value),
-              ),
-              const SizedBox(height: 16),
-            ],
-            DropdownButtonFormField<StudyGrade>(
-              initialValue: draft.grade,
-              decoration: InputDecoration(
-                labelText: l10n.grade,
-                prefixIcon: const Icon(Icons.grade_outlined),
-                errorText: switch (issues.grade) {
-                  'gradeRequired' ||
-                  'gradeInvalid' => l10n.educationStageRequired,
-                  _ => null,
-                },
-              ),
-              items: [
-                for (final item in grades)
-                  DropdownMenuItem(
-                    value: item,
-                    child: Text(l10n.gradeLabel(item)),
-                  ),
-              ],
-              onChanged: (value) => _cubit.updateGrade(value),
-            ),
-            const SizedBox(height: 16),
-            if (tracks != null) ...[
-              DropdownButtonFormField<AcademicTrack>(
-                initialValue: tracks.contains(draft.track) ? draft.track : null,
+            if (hasTracks) ...[
+              DropdownButtonFormField<int>(
+                initialValue: state.tracks.any((t) => t.id == draft.trackId)
+                    ? draft.trackId
+                    : null,
                 decoration: InputDecoration(
                   labelText: l10n.academicTrack,
                   prefixIcon: const Icon(Icons.tune_outlined),
@@ -806,13 +924,13 @@ class _EducationStepState extends State<_EducationStep> {
                   },
                 ),
                 items: [
-                  for (final item in tracks)
+                  for (final item in state.tracks)
                     DropdownMenuItem(
-                      value: item,
-                      child: Text(l10n.academicTrackLabel(item)),
+                      value: item.id,
+                      child: Text(item.label(lang)),
                     ),
                 ],
-                onChanged: (value) => _cubit.updateTrack(value),
+                onChanged: (value) => _cubit.selectTrack(value),
               ),
               const SizedBox(height: 16),
             ],
@@ -822,7 +940,10 @@ class _EducationStepState extends State<_EducationStep> {
                 labelText: l10n.school,
                 prefixIcon: const Icon(Icons.business_outlined),
               ),
-              onChanged: _cubit.updateSchool,
+              onChanged: (val) {
+                _cubit.updateSchoolName(val);
+                _cubit.updateSchool(val);
+              },
             ),
           ],
         );
@@ -839,6 +960,7 @@ class _ReviewStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final lang = Localizations.localeOf(context).languageCode;
     final cubit = context.read<RegistrationCubit>();
     return BlocBuilder<RegistrationCubit, RegistrationState>(
       builder: (context, state) {
@@ -888,11 +1010,23 @@ class _ReviewStep extends StatelessWidget {
                   (l10n.guardianId, draft.guardianId),
                 (
                   l10n.governorate,
-                  l10n.lookup(_governorateLabelKey(draft.governorate)),
+                  state.governorates
+                          .where((g) => g.id == draft.governorateId)
+                          .firstOrNull
+                          ?.label(lang) ??
+                      (draft.governorate.isNotEmpty
+                          ? l10n.lookup(draft.governorate)
+                          : ''),
                 ),
                 (
                   l10n.area,
-                  l10n.lookup(_areaLabelKey(draft.governorate, draft.area)),
+                  state.areas
+                          .where((a) => a.id == draft.areaId)
+                          .firstOrNull
+                          ?.label(lang) ??
+                      (draft.area.isNotEmpty
+                          ? l10n.lookup(draft.area)
+                          : ''),
                 ),
               ],
             ),
@@ -901,21 +1035,50 @@ class _ReviewStep extends StatelessWidget {
               title: l10n.reviewEducation,
               onEdit: () => cubit.editStep(RegistrationStep.education),
               rows: [
+                if (draft.programId != null)
+                  (
+                    l10n.educationProgram,
+                    state.programs
+                            .where((p) => p.id == draft.programId)
+                            .firstOrNull
+                            ?.label(lang) ??
+                        '',
+                  ),
                 (
                   l10n.educationStage,
-                  draft.stage == null ? '' : l10n.lookup(draft.stage!.name),
+                  state.stages
+                          .where((s) => s.id == draft.stageId)
+                          .firstOrNull
+                          ?.label(lang) ??
+                      (draft.stage != null
+                          ? l10n.lookup(draft.stage!.name)
+                          : ''),
                 ),
-                if (draft.type != null)
-                  (l10n.educationType, l10n.lookup(draft.type!.name)),
-                if (draft.system != null)
-                  (l10n.academicSystem, l10n.lookup(draft.system!.name)),
                 (
                   l10n.grade,
-                  draft.grade == null ? '' : l10n.lookup(draft.grade!.name),
+                  state.grades
+                          .where((g) => g.id == draft.gradeId)
+                          .firstOrNull
+                          ?.label(lang) ??
+                      (draft.grade != null
+                          ? l10n.lookup(draft.grade!.name)
+                          : ''),
                 ),
-                if (draft.track != null)
-                  (l10n.academicTrack, l10n.lookup(draft.track!.name)),
-                if (draft.school.trim().isNotEmpty) (l10n.school, draft.school),
+                if (draft.trackId != null)
+                  (
+                    l10n.academicTrack,
+                    state.tracks
+                            .where((t) => t.id == draft.trackId)
+                            .firstOrNull
+                            ?.label(lang) ??
+                        (draft.track != null
+                            ? l10n.lookup(draft.track!.name)
+                            : ''),
+                  ),
+                if (draft.schoolName.trim().isNotEmpty)
+                  (l10n.school, draft.schoolName.trim())
+                else if (draft.school.trim().isNotEmpty)
+                  (l10n.school, draft.school.trim()),
               ],
             ),
           ],
@@ -1019,19 +1182,4 @@ class _SuccessStep extends StatelessWidget {
       ),
     );
   }
-}
-
-String _governorateLabelKey(String id) {
-  for (final (value, labelKey) in _governorates) {
-    if (value == id) return labelKey;
-  }
-  return id;
-}
-
-String _areaLabelKey(String governorate, String id) {
-  for (final (value, labelKey)
-      in _areas[governorate] ?? const <(String, String)>[]) {
-    if (value == id) return labelKey;
-  }
-  return id;
 }

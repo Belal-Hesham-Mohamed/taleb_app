@@ -14,6 +14,7 @@ abstract interface class CatalogClient {
   /// the actual Supabase query.
   Future<List<CatalogRow>> select({
     required String table,
+    String columns = '*',
     List<CatalogFilter> filters = const [],
     String? orderColumn,
     bool ascending = true,
@@ -52,11 +53,12 @@ class SupabaseCatalogClient implements CatalogClient {
   @override
   Future<List<CatalogRow>> select({
     required String table,
+    String columns = '*',
     List<CatalogFilter> filters = const [],
     String? orderColumn,
     bool ascending = true,
   }) async {
-    var query = _client.from(table).select();
+    var query = _client.from(table).select(columns);
     for (final filter in filters) {
       query = query.eq(filter.column, filter.value);
     }
@@ -78,8 +80,8 @@ class SupabaseCatalogClient implements CatalogClient {
       query = query.eq(filter.column, filter.value);
     }
     query = query
-        .lte('min_grade_number', gradeNumber)
-        .gte('max_grade_number', gradeNumber);
+        .or('min_grade_number.is.null,min_grade_number.lte.$gradeNumber')
+        .or('max_grade_number.is.null,max_grade_number.gte.$gradeNumber');
     final response = await query.order('sort_order', ascending: true);
     return (response as List).cast<CatalogRow>();
   }

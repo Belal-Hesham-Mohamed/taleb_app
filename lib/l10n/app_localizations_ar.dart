@@ -520,4 +520,26 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get areaAgouza => 'العجوزة';
+
+  @override
+  String get educationProgram => 'البرنامج التعليمي';
+
+  @override
+  String get educationProgramRequired => 'اختر البرنامج التعليمي.';
+
+  @override
+  String get gradeRequired => 'اختر الصف الدراسي.';
+
+  @override
+  String get retry => 'إعادة المحاولة';
+
+  @override
+  String get catalogLoadError =>
+      'تعذر تحميل البيانات التعليمية. اضغط لإعادة المحاولة.';
+
+  @override
+  String get noOptionsAvailable => 'لا توجد خيارات متاحة';
+
+  @override
+  String get areaInvalid => 'اختر منطقة تابعة لهذه المحافظة.';
 }

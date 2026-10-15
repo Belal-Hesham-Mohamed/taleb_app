@@ -10,6 +10,7 @@ import 'package:taleb/app/pages/auth_pages.dart';
 import 'package:taleb/app/pages/student_registration_page.dart';
 import 'package:taleb/core/errors/failure.dart';
 import 'package:taleb/core/storage/locale_repository.dart';
+import 'package:taleb/features/auth/domain/entities/catalog.dart';
 import 'package:taleb/features/auth/domain/entities/account_role.dart';
 import 'package:taleb/features/auth/domain/entities/user_profile.dart';
 import 'package:taleb/features/auth/domain/repositories/auth_repository.dart';
@@ -81,7 +82,8 @@ class _NoopAuthRepository implements AuthRepository {
       const Right(unit);
 }
 
-class _FakeRegistrationRepository implements RegistrationRepository {
+class _FakeRegistrationRepository
+    implements RegistrationRepository, CatalogRepository {
   PhoneAvailability availabilityResult = const PhoneAvailability(
     status: PhoneAvailabilityStatus.available,
     phone: '+201234567890',
@@ -109,6 +111,123 @@ class _FakeRegistrationRepository implements RegistrationRepository {
     await registerCompleter?.future;
     if (registerResult != null) throw registerResult!;
   }
+
+  @override
+  Future<List<CatalogOption>> loadPrograms() async => [
+    const CatalogOption(
+      id: 1,
+      code: 'general',
+      nameAr: 'عام',
+      nameEn: 'General',
+    ),
+  ];
+
+  @override
+  Future<List<CatalogOption>> loadStages() async => [
+    const CatalogOption(
+      id: 1,
+      code: 'primary',
+      nameAr: 'ابتدائي',
+      nameEn: 'Primary',
+    ),
+    const CatalogOption(
+      id: 3,
+      code: 'secondary',
+      nameAr: 'ثانوي',
+      nameEn: 'Secondary',
+    ),
+  ];
+
+  @override
+  Future<List<GradeOption>> loadGrades({
+    required int programId,
+    required int stageId,
+  }) async {
+    if (stageId == 1) {
+      return [
+        const GradeOption(
+          id: 104,
+          nameAr: 'الصف الرابع',
+          nameEn: 'Grade 4 primary',
+          gradeNumber: 4,
+        ),
+      ];
+    }
+    return [
+      const GradeOption(
+        id: 301,
+        nameAr: 'الصف الأول الثانوي',
+        nameEn: 'Grade 1 secondary',
+        gradeNumber: 1,
+      ),
+      const GradeOption(
+        id: 302,
+        nameAr: 'الصف الثاني الثانوي',
+        nameEn: 'Grade 2 secondary',
+        gradeNumber: 2,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<TrackOption>> loadTracks({
+    required int programId,
+    required int stageId,
+    required int gradeNumber,
+  }) async {
+    if (stageId == 3 && gradeNumber == 2) {
+      return [
+        const TrackOption(
+          id: 1,
+          code: 'scientific',
+          nameAr: 'علمي',
+          nameEn: 'Scientific',
+          minGradeNumber: 2,
+          maxGradeNumber: 3,
+        ),
+      ];
+    }
+    return const [];
+  }
+
+  @override
+  Future<List<GradeSubjectOption>> loadGradeSubjects({
+    required int gradeId,
+  }) async => const [];
+
+  @override
+  Future<List<TrackSubjectOption>> loadTrackSubjects({
+    required int trackId,
+    required int gradeId,
+  }) async => const [];
+
+  @override
+  Future<List<CatalogOption>> loadGovernorates() async => [
+    const CatalogOption(
+      id: 1,
+      code: 'cairo',
+      nameAr: 'القاهرة',
+      nameEn: 'Cairo',
+    ),
+    const CatalogOption(
+      id: 2,
+      code: 'giza',
+      nameAr: 'الجيزة',
+      nameEn: 'Giza',
+    ),
+  ];
+
+  @override
+  Future<List<AreaOption>> loadAreas({required int governorateId}) async => [
+    AreaOption(
+      id: 100,
+      governorateId: governorateId,
+      code: 'nasr_city',
+      nameAr: 'مدينة نصر',
+      nameEn: 'Nasr City',
+      areaType: 'city',
+    ),
+  ];
 }
 
 Future<void> _pumpPage(
@@ -283,7 +402,7 @@ void main() {
     expect(find.text('Select your area.'), findsOneWidget);
   });
 
-  testWidgets('educational choices change with stage, system, and grade', (
+  testWidgets('educational choices change with stage and grade', (
     tester,
   ) async {
     await _pumpPage(tester, _FakeRegistrationRepository());
@@ -293,25 +412,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Academic data'), findsOneWidget);
 
-    // Primary shows grade but no type, system, or track.
-    expect(find.text('Type of education'), findsNothing);
-    expect(find.text('Academic system'), findsNothing);
-    expect(find.text('Track / specialization'), findsNothing);
+    // Pick program General
+    await _pickDropdown(tester, 0, 'General');
 
-    // Secondary shows the education type.
-    await _pickDropdown(tester, 0, 'Secondary');
-    expect(find.text('Type of education'), findsOneWidget);
-
-    // General secondary exposes both configured systems.
-    await _pickDropdown(tester, 1, 'General');
-    expect(find.text('Academic system'), findsOneWidget);
+    // Pick stage Secondary
+    await _pickDropdown(tester, 1, 'Secondary');
 
     // The first year needs no track; the second year requires one.
-    await _pickDropdown(tester, 2, 'General Secondary');
-    await _pickDropdown(tester, 3, 'Grade 1 secondary');
+    await _pickDropdown(tester, 2, 'Grade 1 secondary');
     expect(find.text('Track / specialization'), findsNothing);
 
-    await _pickDropdown(tester, 3, 'Grade 2 secondary');
+    await _pickDropdown(tester, 2, 'Grade 2 secondary');
     expect(find.text('Track / specialization'), findsOneWidget);
   });
 
@@ -321,18 +432,14 @@ void main() {
     await _completePersonal(tester);
     await _tapNext(tester);
 
-    await _pickDropdown(tester, 0, 'Secondary');
-    await _pickDropdown(tester, 1, 'General');
-    await _pickDropdown(tester, 2, 'General Secondary');
-    await _pickDropdown(tester, 3, 'Grade 2 secondary');
-    await _pickDropdown(tester, 4, 'Scientific');
+    await _pickDropdown(tester, 0, 'General');
+    await _pickDropdown(tester, 1, 'Secondary');
+    await _pickDropdown(tester, 2, 'Grade 2 secondary');
+    await _pickDropdown(tester, 3, 'Scientific');
     expect(find.text('Scientific'), findsOneWidget);
 
-    // Changing the stage back to primary clears the type, system, grade,
-    // and track.
-    await _pickDropdown(tester, 0, 'Primary');
-    expect(find.text('Type of education'), findsNothing);
-    expect(find.text('Academic system'), findsNothing);
+    // Changing the stage back to primary clears the grade and track.
+    await _pickDropdown(tester, 1, 'Primary');
     expect(find.text('Track / specialization'), findsNothing);
     expect(find.text('Scientific'), findsNothing);
   });
@@ -364,8 +471,9 @@ void main() {
     await _completePersonal(tester);
     await _tapNext(tester);
     await tester.pumpAndSettle();
-    await _pickDropdown(tester, 0, 'Primary');
-    await _pickDropdown(tester, 1, 'Grade 4 primary');
+    await _pickDropdown(tester, 0, 'General');
+    await _pickDropdown(tester, 1, 'Primary');
+    await _pickDropdown(tester, 2, 'Grade 4 primary');
     await _tapNext(tester);
     await tester.pumpAndSettle();
     expect(find.text('Review your data'), findsOneWidget);
@@ -386,8 +494,9 @@ void main() {
     await _completePersonal(tester);
     await _tapNext(tester);
     await tester.pumpAndSettle();
-    await _pickDropdown(tester, 0, 'Primary');
-    await _pickDropdown(tester, 1, 'Grade 4 primary');
+    await _pickDropdown(tester, 0, 'General');
+    await _pickDropdown(tester, 1, 'Primary');
+    await _pickDropdown(tester, 2, 'Grade 4 primary');
     await _tapNext(tester);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Create account'));
@@ -410,8 +519,9 @@ void main() {
     await _completePersonal(tester);
     await _tapNext(tester);
     await tester.pumpAndSettle();
-    await _pickDropdown(tester, 0, 'Primary');
-    await _pickDropdown(tester, 1, 'Grade 4 primary');
+    await _pickDropdown(tester, 0, 'General');
+    await _pickDropdown(tester, 1, 'Primary');
+    await _pickDropdown(tester, 2, 'Grade 4 primary');
     await _tapNext(tester);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Create account'));
@@ -438,8 +548,9 @@ void main() {
     await _completePersonal(tester);
     await _tapNext(tester);
     await tester.pumpAndSettle();
-    await _pickDropdown(tester, 0, 'Primary');
-    await _pickDropdown(tester, 1, 'Grade 4 primary');
+    await _pickDropdown(tester, 0, 'General');
+    await _pickDropdown(tester, 1, 'Primary');
+    await _pickDropdown(tester, 2, 'Grade 4 primary');
     await _tapNext(tester);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Create account'));

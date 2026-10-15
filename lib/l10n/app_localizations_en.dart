@@ -532,4 +532,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get areaAgouza => 'Agouza';
+
+  @override
+  String get educationProgram => 'Educational program';
+
+  @override
+  String get educationProgramRequired => 'Select the educational program.';
+
+  @override
+  String get gradeRequired => 'Select the grade.';
+
+  @override
+  String get retry => 'Retry';
+
+  @override
+  String get catalogLoadError =>
+      'Failed to load education options. Tap to retry.';
+
+  @override
+  String get noOptionsAvailable => 'No options available';
+
+  @override
+  String get areaInvalid => 'Select an area belonging to this governorate.';
 }

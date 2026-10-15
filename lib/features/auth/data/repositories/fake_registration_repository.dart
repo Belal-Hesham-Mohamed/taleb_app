@@ -143,12 +143,17 @@ class FakeRegistrationRepository
       2 => 3,
       _ => 3,
     };
+    final stageName = switch (stageId) {
+      1 => 'primary',
+      2 => 'preparatory',
+      _ => 'secondary',
+    };
     final grades = [
       for (var number = 1; number <= count; number++)
         GradeOption(
           id: stageId * 100 + number,
           nameAr: 'الصف $number',
-          nameEn: 'Grade $number',
+          nameEn: 'Grade $number $stageName',
           gradeNumber: number,
         ),
     ];
@@ -238,9 +243,9 @@ class FakeRegistrationRepository
       AreaOption(
         id: governorateId * 100,
         governorateId: governorateId,
-        code: 'city',
-        nameAr: 'مدينة $governorateId',
-        nameEn: 'City $governorateId',
+        code: 'nasr_city',
+        nameAr: 'مدينة نصر',
+        nameEn: 'Nasr City',
         areaType: 'city',
       ),
     ]);

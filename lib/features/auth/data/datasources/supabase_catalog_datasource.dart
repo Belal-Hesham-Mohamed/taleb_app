@@ -82,7 +82,11 @@ class SupabaseCatalogDatasource {
   }) async {
     final rows = await _client.select(
       table: 'education_grade_subjects',
-      filters: [CatalogFilter('grade_id', gradeId)],
+      columns: '*,education_subjects!inner(*)',
+      filters: [
+        CatalogFilter('grade_id', gradeId),
+        const CatalogFilter('education_subjects.is_active', true),
+      ],
       orderColumn: 'sort_order',
     );
     return rows
@@ -99,9 +103,11 @@ class SupabaseCatalogDatasource {
   }) async {
     final rows = await _client.select(
       table: 'education_track_subjects',
+      columns: '*,education_subjects!inner(*)',
       filters: [
         CatalogFilter('track_id', trackId),
         CatalogFilter('grade_id', gradeId),
+        const CatalogFilter('education_subjects.is_active', true),
       ],
       orderColumn: 'sort_order',
     );

@@ -168,5 +168,12 @@
   "areaZamalek": "Zamalek",
   "areaDowntown": "Downtown",
   "areaDokki": "Dokki",
-  "areaAgouza": "Agouza"
+  "areaAgouza": "Agouza",
+  "educationProgram": "Educational program",
+  "educationProgramRequired": "Select the educational program.",
+  "gradeRequired": "Select the grade.",
+  "retry": "Retry",
+  "catalogLoadError": "Failed to load education options. Tap to retry.",
+  "noOptionsAvailable": "No options available",
+  "areaInvalid": "Select an area belonging to this governorate."
 }

@@ -230,6 +230,7 @@ class RegistrationDraft {
     Object? clearStageId = _absent,
     Object? clearGradeId = _absent,
     Object? clearTrackId = _absent,
+    Object? clearGradeNumber = _absent,
     Object? clearGovernorateId = _absent,
     Object? clearAreaId = _absent,
   }) => RegistrationDraft(
@@ -255,7 +256,9 @@ class RegistrationDraft {
     stageId: clearStageId == _absent ? (stageId ?? this.stageId) : null,
     gradeId: clearGradeId == _absent ? (gradeId ?? this.gradeId) : null,
     trackId: clearTrackId == _absent ? (trackId ?? this.trackId) : null,
-    gradeNumber: gradeNumber ?? this.gradeNumber,
+    gradeNumber: clearGradeNumber == _absent
+        ? (gradeNumber ?? this.gradeNumber)
+        : null,
     governorateId: clearGovernorateId == _absent
         ? (governorateId ?? this.governorateId)
         : null,
@@ -296,7 +299,7 @@ class RegistrationDraft {
     clearStageId: true,
     clearGradeId: true,
     clearTrackId: true,
-    gradeNumber: null,
+    clearGradeNumber: true,
   );
 
   /// Replaces the stage and clears the grade and track ids.
@@ -304,13 +307,14 @@ class RegistrationDraft {
     stageId: stageId,
     clearGradeId: true,
     clearTrackId: true,
-    gradeNumber: null,
+    clearGradeNumber: true,
   );
 
   /// Replaces the grade and clears the track id.
   RegistrationDraft withGradeId(int gradeId, {int? gradeNumber}) => copyWith(
     gradeId: gradeId,
-    gradeNumber: gradeNumber ?? this.gradeNumber,
+    gradeNumber: gradeNumber,
+    clearGradeNumber: gradeNumber == null ? true : _absent,
     clearTrackId: true,
   );
 

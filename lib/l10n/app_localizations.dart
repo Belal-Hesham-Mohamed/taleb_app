@@ -1093,6 +1093,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Agouza'**
   String get areaAgouza;
+
+  /// No description provided for @educationProgram.
+  ///
+  /// In en, this message translates to:
+  /// **'Educational program'**
+  String get educationProgram;
+
+  /// No description provided for @educationProgramRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the educational program.'**
+  String get educationProgramRequired;
+
+  /// No description provided for @gradeRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the grade.'**
+  String get gradeRequired;
+
+  /// No description provided for @retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retry;
+
+  /// No description provided for @catalogLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load education options. Tap to retry.'**
+  String get catalogLoadError;
+
+  /// No description provided for @noOptionsAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No options available'**
+  String get noOptionsAvailable;
+
+  /// No description provided for @areaInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an area belonging to this governorate.'**
+  String get areaInvalid;
 }
 
 class _AppLocalizationsDelegate

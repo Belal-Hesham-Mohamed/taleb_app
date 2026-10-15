@@ -95,8 +95,9 @@ Future<void> _fillPersonal(WidgetTester tester) async {
 
 /// Fills the education step with a simple primary selection.
 Future<void> _fillEducation(WidgetTester tester) async {
-  await _pickDropdown(tester, 0, 'Primary');
-  await _pickDropdown(tester, 1, 'Grade 4 primary');
+  await _pickDropdown(tester, 0, 'General');
+  await _pickDropdown(tester, 1, 'Primary');
+  await _pickDropdown(tester, 2, 'Grade 4 primary');
   await _tapNext(tester);
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taleb/features/auth/data/datasources/catalog_client.dart';
 import 'package:taleb/features/auth/data/datasources/supabase_catalog_datasource.dart';
+import 'package:taleb/features/auth/domain/entities/catalog.dart';
 
 class _FakeCatalogClient implements CatalogClient {
   _FakeCatalogClient(this.rows);
@@ -17,6 +18,7 @@ class _FakeCatalogClient implements CatalogClient {
   @override
   Future<List<CatalogRow>> select({
     required String table,
+    String columns = '*',
     List<CatalogFilter> filters = const [],
     String? orderColumn,
     bool ascending = true,
@@ -24,6 +26,7 @@ class _FakeCatalogClient implements CatalogClient {
     calls.add({
       'kind': 'select',
       'table': table,
+      'columns': columns,
       'filters': filters.map((f) => '${f.column}=${f.value}').toList(),
       'orderColumn': orderColumn,
     });
@@ -174,19 +177,39 @@ void main() {
       expect(filters, contains('is_active=true'));
     });
 
-    test('parses nullable range boundaries', () async {
-      client.rows['education_tracks'] = [_track(7, min: null, max: null)];
-      final result = await datasource.loadTracks(
-        programId: 1,
-        stageId: 2,
-        gradeNumber: 9,
-      );
-      expect(result.single.appliesToGrade(9), isTrue);
+    test('parses nullable range boundaries as open ends', () async {
+      // Both null: applies to any grade
+      final bothNull = _track(7, min: null, max: null);
+      final trackBothNull = TrackOption.fromMap(bothNull);
+      expect(trackBothNull.appliesToGrade(1), isTrue);
+      expect(trackBothNull.appliesToGrade(12), isTrue);
+
+      // Minimum null: open lower boundary (applies to grades <= max)
+      final minNull = _track(8, min: null, max: 2);
+      final trackMinNull = TrackOption.fromMap(minNull);
+      expect(trackMinNull.appliesToGrade(1), isTrue);
+      expect(trackMinNull.appliesToGrade(2), isTrue);
+      expect(trackMinNull.appliesToGrade(3), isFalse);
+
+      // Maximum null: open upper boundary (applies to grades >= min)
+      final maxNull = _track(9, min: 2, max: null);
+      final trackMaxNull = TrackOption.fromMap(maxNull);
+      expect(trackMaxNull.appliesToGrade(1), isFalse);
+      expect(trackMaxNull.appliesToGrade(2), isTrue);
+      expect(trackMaxNull.appliesToGrade(3), isTrue);
+
+      // Both non-null: closed boundary
+      final bounded = _track(10, min: 2, max: 3);
+      final trackBounded = TrackOption.fromMap(bounded);
+      expect(trackBounded.appliesToGrade(1), isFalse);
+      expect(trackBounded.appliesToGrade(2), isTrue);
+      expect(trackBounded.appliesToGrade(3), isTrue);
+      expect(trackBounded.appliesToGrade(4), isFalse);
     });
   });
 
   group('grade subjects', () {
-    test('embeds the subject catalog and filters grade', () async {
+    test('embeds the subject catalog and filters grade and active subjects', () async {
       client.rows['education_grade_subjects'] = [
         {
           'is_required': true,
@@ -197,8 +220,13 @@ void main() {
       final result = await datasource.loadGradeSubjects(gradeId: 3);
       expect(result.single.subject.label('en'), 'Subject 20');
       expect(result.single.isRequired, isTrue);
+      expect(
+        client.calls.single['columns'],
+        '*,education_subjects!inner(*)',
+      );
       final filters = client.calls.single['filters'] as List;
       expect(filters, contains('grade_id=3'));
+      expect(filters, contains('education_subjects.is_active=true'));
     });
 
     test('drops rows whose subject is inactive', () async {
@@ -215,7 +243,7 @@ void main() {
   });
 
   group('track subjects', () {
-    test('filters by both track and grade', () async {
+    test('filters by track, grade, and active subjects with embedded relationship', () async {
       client.rows['education_track_subjects'] = [
         {
           'subject_role': 'choice',
@@ -229,8 +257,12 @@ void main() {
       final result = await datasource.loadTrackSubjects(trackId: 7, gradeId: 8);
       expect(result.single.isChoice, isTrue);
       expect(result.single.choiceGroup, 'lang');
+      expect(
+        client.calls.single['columns'],
+        '*,education_subjects!inner(*)',
+      );
       final filters = client.calls.single['filters'] as List;
-      expect(filters, containsAll(['track_id=7', 'grade_id=8']));
+      expect(filters, containsAll(['track_id=7', 'grade_id=8', 'education_subjects.is_active=true']));
     });
   });
 

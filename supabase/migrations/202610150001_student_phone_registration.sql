@@ -21,7 +21,22 @@ alter table public.student_profiles
   add column if not exists education_type text,
   add column if not exists academic_system text,
   add column if not exists grade text,
-  add column if not exists academic_track text;
+  add column if not exists academic_track text,
+  add column if not exists education_program_id bigint references public.education_programs(id),
+  add column if not exists education_grade_id bigint references public.education_grades(id),
+  add column if not exists education_track_id bigint references public.education_tracks(id),
+  add column if not exists area_id bigint references public.areas(id),
+  add column if not exists school_name text,
+  add column if not exists school_type text;
+
+create index if not exists idx_student_profiles_education_program_id
+  on public.student_profiles (education_program_id);
+create index if not exists idx_student_profiles_education_grade_id
+  on public.student_profiles (education_grade_id);
+create index if not exists idx_student_profiles_education_track_id
+  on public.student_profiles (education_track_id);
+create index if not exists idx_student_profiles_area_id
+  on public.student_profiles (area_id);
 
 -- 2. Enforce uniqueness of the normalized phone number.
 --    A partial unique index ignores rows without a phone number.

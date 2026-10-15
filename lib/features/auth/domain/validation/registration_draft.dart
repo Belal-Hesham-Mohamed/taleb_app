@@ -1,3 +1,4 @@
+import '../entities/catalog.dart';
 import '../entities/education_path.dart';
 import '../entities/registration_draft.dart';
 import 'phone_number.dart';
@@ -58,6 +59,7 @@ class PersonalIssues {
 
 class EducationIssues {
   const EducationIssues({
+    this.program,
     this.stage,
     this.type,
     this.system,
@@ -66,6 +68,7 @@ class EducationIssues {
     this.school,
   });
 
+  final String? program;
   final String? stage;
   final String? type;
   final String? system;
@@ -74,6 +77,7 @@ class EducationIssues {
   final String? school;
 
   bool get isValid =>
+      program == null &&
       stage == null &&
       type == null &&
       system == null &&
@@ -126,7 +130,10 @@ CredentialsIssues credentialsIssues(RegistrationDraft draft) {
 /// Validates the personal-information step. Identity fields (student ID,
 /// guardian identity) are optional; the remaining fields are required, and a
 /// provided guardian phone is validated.
-PersonalIssues personalIssues(RegistrationDraft draft) {
+PersonalIssues personalIssues(
+  RegistrationDraft draft, {
+  List<AreaOption>? areas,
+}) {
   String? validateDate(String value) {
     final match = _datePattern.firstMatch(value.trim());
     if (match == null) return 'dateOfBirthInvalid';
@@ -137,6 +144,29 @@ PersonalIssues personalIssues(RegistrationDraft draft) {
       return 'dateOfBirthInvalid';
     }
     return null;
+  }
+
+  final hasGovernorate =
+      draft.governorateId != null || draft.governorate.trim().isNotEmpty;
+  final hasArea = draft.areaId != null || draft.area.trim().isNotEmpty;
+
+  final String? governorateIssue =
+      hasGovernorate ? null : 'governorateRequired';
+
+  String? areaIssue;
+  if (!hasArea) {
+    areaIssue = 'areaRequired';
+  } else if (draft.areaId != null && draft.governorateId == null) {
+    areaIssue = 'areaInvalid';
+  } else if (areas != null && draft.areaId != null) {
+    final match = areas.where((a) => a.id == draft.areaId).firstOrNull;
+    if (match == null && areas.isNotEmpty) {
+      areaIssue = 'areaInvalid';
+    } else if (match != null &&
+        draft.governorateId != null &&
+        match.governorateId != draft.governorateId) {
+      areaIssue = 'areaInvalid';
+    }
   }
 
   return PersonalIssues(
@@ -152,15 +182,56 @@ PersonalIssues personalIssues(RegistrationDraft draft) {
               ? 'guardianPhoneInvalid'
               : null),
     guardianId: null,
-    governorate: draft.governorate.trim().isEmpty
-        ? 'governorateRequired'
-        : null,
-    area: draft.area.trim().isEmpty ? 'areaRequired' : null,
+    governorate: governorateIssue,
+    area: areaIssue,
   );
 }
 
-/// Validates the educational step against the configured academic rules.
-EducationIssues educationIssues(RegistrationDraft draft) {
+/// Validates the educational step against the configured academic rules or
+/// database catalog selections.
+EducationIssues educationIssues(
+  RegistrationDraft draft, {
+  List<TrackOption>? availableTracks,
+  bool tracksLoaded = false,
+}) {
+  final usesCatalog =
+      draft.programId != null ||
+      draft.stageId != null ||
+      draft.gradeId != null ||
+      draft.trackId != null ||
+      (draft.stage == null && draft.grade == null);
+
+  if (usesCatalog) {
+    final String? programIssue =
+        draft.programId == null ? 'educationProgramRequired' : null;
+    final String? stageIssue =
+        draft.stageId == null ? 'educationStageRequired' : null;
+    final String? gradeIssue =
+        draft.gradeId == null ? 'gradeRequired' : null;
+
+    String? trackIssue;
+    if (tracksLoaded && availableTracks != null) {
+      if (availableTracks.isNotEmpty) {
+        if (draft.trackId == null) {
+          trackIssue = 'trackRequired';
+        } else if (!availableTracks.any((t) => t.id == draft.trackId)) {
+          trackIssue = 'trackInvalid';
+        }
+      } else if (draft.trackId != null) {
+        trackIssue = 'trackNotAllowed';
+      }
+    } else if (draft.trackId != null && availableTracks != null && availableTracks.isEmpty) {
+      trackIssue = 'trackNotAllowed';
+    }
+
+    return EducationIssues(
+      program: programIssue,
+      stage: stageIssue,
+      grade: gradeIssue,
+      track: trackIssue,
+    );
+  }
+
   final stage = draft.stage;
   final grade = draft.grade;
   if (stage == null) {

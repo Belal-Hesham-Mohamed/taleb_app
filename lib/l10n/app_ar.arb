@@ -168,5 +168,12 @@
   "areaZamalek": "الزمالك",
   "areaDowntown": "وسط البلد",
   "areaDokki": "الدقي",
-  "areaAgouza": "العجوزة"
+  "areaAgouza": "العجوزة",
+  "educationProgram": "البرنامج التعليمي",
+  "educationProgramRequired": "اختر البرنامج التعليمي.",
+  "gradeRequired": "اختر الصف الدراسي.",
+  "retry": "إعادة المحاولة",
+  "catalogLoadError": "تعذر تحميل البيانات التعليمية. اضغط لإعادة المحاولة.",
+  "noOptionsAvailable": "لا توجد خيارات متاحة",
+  "areaInvalid": "اختر منطقة تابعة لهذه المحافظة."
 }
