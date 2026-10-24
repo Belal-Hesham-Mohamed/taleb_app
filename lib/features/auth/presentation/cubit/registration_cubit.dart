@@ -33,8 +33,14 @@ class RegistrationState {
     this.tracks = const [],
     this.governorates = const [],
     this.areas = const [],
-    this.catalogLoading = false,
-    this.catalogError = false,
+    this.gradeSubjects = const [],
+    this.trackSubjects = const [],
+    this.rootStatus = CatalogQueryStatus.idle,
+    this.gradesStatus = CatalogQueryStatus.idle,
+    this.tracksStatus = CatalogQueryStatus.idle,
+    this.areasStatus = CatalogQueryStatus.idle,
+    this.gradeSubjectsStatus = CatalogQueryStatus.idle,
+    this.trackSubjectsStatus = CatalogQueryStatus.idle,
   });
 
   final RegistrationStep step;
@@ -64,13 +70,33 @@ class RegistrationState {
   final List<TrackOption> tracks;
   final List<CatalogOption> governorates;
   final List<AreaOption> areas;
+  final List<GradeSubjectOption> gradeSubjects;
+  final List<TrackSubjectOption> trackSubjects;
 
-  /// True while a catalog request is in flight.
-  final bool catalogLoading;
+  final CatalogQueryStatus rootStatus;
+  final CatalogQueryStatus gradesStatus;
+  final CatalogQueryStatus tracksStatus;
+  final CatalogQueryStatus areasStatus;
+  final CatalogQueryStatus gradeSubjectsStatus;
+  final CatalogQueryStatus trackSubjectsStatus;
 
-  /// Set when a catalog request failed. Options stay empty rather than
-  /// showing stale or invented data.
-  final bool catalogError;
+  /// True while any catalog request is in flight.
+  bool get catalogLoading =>
+      rootStatus.isLoading ||
+      gradesStatus.isLoading ||
+      tracksStatus.isLoading ||
+      areasStatus.isLoading ||
+      gradeSubjectsStatus.isLoading ||
+      trackSubjectsStatus.isLoading;
+
+  /// True when any catalog request failed.
+  bool get catalogError =>
+      rootStatus.isFailure ||
+      gradesStatus.isFailure ||
+      tracksStatus.isFailure ||
+      areasStatus.isFailure ||
+      gradeSubjectsStatus.isFailure ||
+      trackSubjectsStatus.isFailure;
 
   bool get phoneTaken =>
       phoneAvailability.status == PhoneAvailabilityStatus.taken;
@@ -97,8 +123,14 @@ class RegistrationState {
     List<TrackOption>? tracks,
     List<CatalogOption>? governorates,
     List<AreaOption>? areas,
-    bool? catalogLoading,
-    bool? catalogError,
+    List<GradeSubjectOption>? gradeSubjects,
+    List<TrackSubjectOption>? trackSubjects,
+    CatalogQueryStatus? rootStatus,
+    CatalogQueryStatus? gradesStatus,
+    CatalogQueryStatus? tracksStatus,
+    CatalogQueryStatus? areasStatus,
+    CatalogQueryStatus? gradeSubjectsStatus,
+    CatalogQueryStatus? trackSubjectsStatus,
   }) => RegistrationState(
     step: step ?? this.step,
     draft: draft ?? this.draft,
@@ -118,8 +150,14 @@ class RegistrationState {
     tracks: tracks ?? this.tracks,
     governorates: governorates ?? this.governorates,
     areas: areas ?? this.areas,
-    catalogLoading: catalogLoading ?? this.catalogLoading,
-    catalogError: catalogError ?? this.catalogError,
+    gradeSubjects: gradeSubjects ?? this.gradeSubjects,
+    trackSubjects: trackSubjects ?? this.trackSubjects,
+    rootStatus: rootStatus ?? this.rootStatus,
+    gradesStatus: gradesStatus ?? this.gradesStatus,
+    tracksStatus: tracksStatus ?? this.tracksStatus,
+    areasStatus: areasStatus ?? this.areasStatus,
+    gradeSubjectsStatus: gradeSubjectsStatus ?? this.gradeSubjectsStatus,
+    trackSubjectsStatus: trackSubjectsStatus ?? this.trackSubjectsStatus,
   );
 }
 
@@ -137,9 +175,14 @@ class RegistrationCubit extends Cubit<RegistrationState> {
   final RegistrationRepository _repository;
   final CatalogRepository? _catalog;
 
-  /// Incremented on every selection change. A response is applied only when
-  /// its generation still matches, which discards stale results.
-  int _generation = 0;
+  /// Independent request tokens so a governorate change cannot drop a grade
+  /// response, and a stale result cannot leave another catalog spinner stuck.
+  int _rootGeneration = 0;
+  int _gradesGeneration = 0;
+  int _tracksGeneration = 0;
+  int _areasGeneration = 0;
+  int _gradeSubjectsGeneration = 0;
+  int _trackSubjectsGeneration = 0;
 
   /// True when no catalog source is available, so catalog-dependent UI must
   /// stay disabled rather than crash.
@@ -217,80 +260,119 @@ class RegistrationCubit extends Cubit<RegistrationState> {
   Future<void> loadCatalog() async {
     final catalog = _catalog;
     if (catalog == null) return;
-    emit(state.copyWith(catalogLoading: true, catalogError: false));
+    final generation = ++_rootGeneration;
+    emit(state.copyWith(rootStatus: CatalogQueryStatus.loading));
     try {
       final results = await (
         catalog.loadPrograms(),
         catalog.loadStages(),
         catalog.loadGovernorates(),
       ).wait;
+      if (generation != _rootGeneration) return;
       emit(
         state.copyWith(
-          catalogLoading: false,
+          rootStatus: CatalogQueryStatus.success,
           programs: results.$1,
           stages: results.$2,
           governorates: results.$3,
         ),
       );
     } catch (_) {
-      emit(state.copyWith(catalogLoading: false, catalogError: true));
+      if (generation != _rootGeneration) return;
+      emit(state.copyWith(rootStatus: CatalogQueryStatus.failure));
     }
   }
 
   /// Selects the education program and clears the dependent selections.
-  void selectProgram(int programId) {
-    _generation++;
+  void selectProgram(int programId, {String? code}) {
+    _bumpEducationDependents();
     emit(
       state.copyWith(
-        draft: state.draft.withProgram(programId),
+        draft: state.draft.withProgram(programId, code: code),
         grades: const [],
         tracks: const [],
+        gradeSubjects: const [],
+        trackSubjects: const [],
+        gradesStatus: CatalogQueryStatus.idle,
+        tracksStatus: CatalogQueryStatus.idle,
+        gradeSubjectsStatus: CatalogQueryStatus.idle,
+        trackSubjectsStatus: CatalogQueryStatus.idle,
       ),
     );
   }
 
   /// Selects the education stage and clears the dependent selections.
-  void selectStage(int stageId) {
-    _generation++;
+  void selectStage(int stageId, {String? code}) {
+    _bumpEducationDependents();
     emit(
       state.copyWith(
-        draft: state.draft.withStageId(stageId),
+        draft: state.draft.withStageId(stageId, code: code),
         grades: const [],
         tracks: const [],
+        gradeSubjects: const [],
+        trackSubjects: const [],
+        gradesStatus: CatalogQueryStatus.idle,
+        tracksStatus: CatalogQueryStatus.idle,
+        gradeSubjectsStatus: CatalogQueryStatus.idle,
+        trackSubjectsStatus: CatalogQueryStatus.idle,
       ),
     );
   }
 
   /// Selects the grade and clears the track selection.
   void selectGrade(int gradeId, {int? gradeNumber}) {
-    _generation++;
+    _tracksGeneration++;
+    _gradeSubjectsGeneration++;
+    _trackSubjectsGeneration++;
     emit(
       state.copyWith(
         draft: state.draft.withGradeId(gradeId, gradeNumber: gradeNumber),
         tracks: const [],
+        gradeSubjects: const [],
+        trackSubjects: const [],
+        tracksStatus: CatalogQueryStatus.idle,
+        gradeSubjectsStatus: CatalogQueryStatus.idle,
+        trackSubjectsStatus: CatalogQueryStatus.idle,
       ),
     );
   }
 
   /// Selects the track. Passing null clears it.
-  void selectTrack(int? trackId) {
-    emit(state.copyWith(draft: state.draft.withTrackId(trackId)));
-  }
-
-  /// Selects the governorate and clears the area selection.
-  void selectGovernorate(int governorateId) {
-    _generation++;
+  void selectTrack(int? trackId, {String? code}) {
+    _trackSubjectsGeneration++;
     emit(
       state.copyWith(
-        draft: state.draft.withGovernorate(governorateId),
+        draft: state.draft.withTrackId(trackId, code: code),
+        trackSubjects: const [],
+        trackSubjectsStatus: trackId == null
+            ? CatalogQueryStatus.idle
+            : CatalogQueryStatus.idle,
+      ),
+    );
+  }
+
+  /// Selects the governorate and clears the area selection and legacy text.
+  void selectGovernorate(int governorateId, {String? code}) {
+    _areasGeneration++;
+    emit(
+      state.copyWith(
+        draft: state.draft.withGovernorate(governorateId, code: code),
         areas: const [],
+        areasStatus: CatalogQueryStatus.idle,
       ),
     );
   }
 
   /// Selects the area.
-  void selectArea(int areaId) {
-    emit(state.copyWith(draft: state.draft.withArea(areaId)));
+  void selectArea(int areaId, {String? code}) {
+    emit(state.copyWith(draft: state.draft.withArea(areaId, code: code)));
+  }
+
+  void _bumpEducationDependents() {
+    _gradesGeneration++;
+    _tracksGeneration++;
+    _gradeSubjectsGeneration++;
+    _trackSubjectsGeneration++;
   }
 
   void updateSchoolName(String value) =>
@@ -308,18 +390,25 @@ class RegistrationCubit extends Cubit<RegistrationState> {
     final programId = state.draft.programId;
     final stageId = state.draft.stageId;
     if (catalog == null || programId == null || stageId == null) return;
-    final generation = _generation;
-    emit(state.copyWith(catalogLoading: true, catalogError: false));
+    final generation = ++_gradesGeneration;
+    emit(state.copyWith(gradesStatus: CatalogQueryStatus.loading, grades: const []));
     try {
       final grades = await catalog.loadGrades(
         programId: programId,
         stageId: stageId,
       );
-      if (generation != _generation) return;
-      emit(state.copyWith(catalogLoading: false, grades: grades));
+      if (generation != _gradesGeneration) return;
+      emit(
+        state.copyWith(gradesStatus: CatalogQueryStatus.success, grades: grades),
+      );
     } catch (_) {
-      if (generation != _generation) return;
-      emit(state.copyWith(catalogLoading: false, catalogError: true));
+      if (generation != _gradesGeneration) return;
+      emit(
+        state.copyWith(
+          gradesStatus: CatalogQueryStatus.failure,
+          grades: const [],
+        ),
+      );
     }
   }
 
@@ -338,19 +427,26 @@ class RegistrationCubit extends Cubit<RegistrationState> {
         gradeNumber == null) {
       return;
     }
-    final generation = _generation;
-    emit(state.copyWith(catalogLoading: true, catalogError: false));
+    final generation = ++_tracksGeneration;
+    emit(state.copyWith(tracksStatus: CatalogQueryStatus.loading, tracks: const []));
     try {
       final tracks = await catalog.loadTracks(
         programId: programId,
         stageId: stageId,
         gradeNumber: gradeNumber,
       );
-      if (generation != _generation) return;
-      emit(state.copyWith(catalogLoading: false, tracks: tracks));
+      if (generation != _tracksGeneration) return;
+      emit(
+        state.copyWith(tracksStatus: CatalogQueryStatus.success, tracks: tracks),
+      );
     } catch (_) {
-      if (generation != _generation) return;
-      emit(state.copyWith(catalogLoading: false, catalogError: true));
+      if (generation != _tracksGeneration) return;
+      emit(
+        state.copyWith(
+          tracksStatus: CatalogQueryStatus.failure,
+          tracks: const [],
+        ),
+      );
     }
   }
 
@@ -359,33 +455,136 @@ class RegistrationCubit extends Cubit<RegistrationState> {
     final catalog = _catalog;
     final governorateId = state.draft.governorateId;
     if (catalog == null || governorateId == null) return;
-    final generation = _generation;
-    emit(state.copyWith(catalogLoading: true, catalogError: false));
+    final generation = ++_areasGeneration;
+    emit(state.copyWith(areasStatus: CatalogQueryStatus.loading, areas: const []));
     try {
       final areas = await catalog.loadAreas(governorateId: governorateId);
-      if (generation != _generation) return;
-      emit(state.copyWith(catalogLoading: false, areas: areas));
+      if (generation != _areasGeneration) return;
+      emit(state.copyWith(areasStatus: CatalogQueryStatus.success, areas: areas));
     } catch (_) {
-      if (generation != _generation) return;
-      emit(state.copyWith(catalogLoading: false, catalogError: true));
+      if (generation != _areasGeneration) return;
+      emit(
+        state.copyWith(
+          areasStatus: CatalogQueryStatus.failure,
+          areas: const [],
+        ),
+      );
     }
   }
 
-  /// Loads the subjects for the selected grade.
-  Future<List<GradeSubjectOption>> loadGradeSubjects() {
+  /// Loads the subjects for the selected grade into state.
+  Future<void> loadGradeSubjects() async {
+    final catalog = _catalog;
     final gradeId = state.draft.gradeId;
-    if (gradeId == null) return Future.value(const []);
-    return _catalog?.loadGradeSubjects(gradeId: gradeId) ??
-        Future.value(const []);
+    if (catalog == null || gradeId == null) return;
+    final generation = ++_gradeSubjectsGeneration;
+    emit(
+      state.copyWith(
+        gradeSubjectsStatus: CatalogQueryStatus.loading,
+        gradeSubjects: const [],
+      ),
+    );
+    try {
+      final subjects = await catalog.loadGradeSubjects(gradeId: gradeId);
+      if (generation != _gradeSubjectsGeneration) return;
+      emit(
+        state.copyWith(
+          gradeSubjectsStatus: CatalogQueryStatus.success,
+          gradeSubjects: subjects,
+        ),
+      );
+    } catch (_) {
+      if (generation != _gradeSubjectsGeneration) return;
+      emit(
+        state.copyWith(
+          gradeSubjectsStatus: CatalogQueryStatus.failure,
+          gradeSubjects: const [],
+        ),
+      );
+    }
   }
 
-  /// Loads the subjects for the selected track and grade.
-  Future<List<TrackSubjectOption>> loadTrackSubjects() {
+  /// Loads the subjects for the selected track and grade into state.
+  Future<void> loadTrackSubjects() async {
+    final catalog = _catalog;
     final trackId = state.draft.trackId;
     final gradeId = state.draft.gradeId;
-    if (trackId == null || gradeId == null) return Future.value(const []);
-    return _catalog?.loadTrackSubjects(trackId: trackId, gradeId: gradeId) ??
-        Future.value(const []);
+    if (catalog == null || trackId == null || gradeId == null) {
+      emit(
+        state.copyWith(
+          trackSubjects: const [],
+          trackSubjectsStatus: CatalogQueryStatus.idle,
+        ),
+      );
+      return;
+    }
+    final generation = ++_trackSubjectsGeneration;
+    emit(
+      state.copyWith(
+        trackSubjectsStatus: CatalogQueryStatus.loading,
+        trackSubjects: const [],
+      ),
+    );
+    try {
+      final subjects = await catalog.loadTrackSubjects(
+        trackId: trackId,
+        gradeId: gradeId,
+      );
+      if (generation != _trackSubjectsGeneration) return;
+      emit(
+        state.copyWith(
+          trackSubjectsStatus: CatalogQueryStatus.success,
+          trackSubjects: subjects,
+        ),
+      );
+    } catch (_) {
+      if (generation != _trackSubjectsGeneration) return;
+      emit(
+        state.copyWith(
+          trackSubjectsStatus: CatalogQueryStatus.failure,
+          trackSubjects: const [],
+        ),
+      );
+    }
+  }
+
+  validation.PersonalIssues _personalIssues() => validation.personalIssues(
+    state.draft,
+    areas: state.areas,
+    requireCatalogIds: hasCatalog,
+    areasStatus: state.areasStatus,
+  );
+
+  validation.EducationIssues _educationIssues() => validation.educationIssues(
+    state.draft,
+    availableTracks: state.tracks,
+    availableGrades: state.grades,
+    requireCatalogIds: hasCatalog,
+    gradesStatus: state.gradesStatus,
+    tracksStatus: state.tracksStatus,
+  );
+
+  bool _catalogSelectionsReady() {
+    if (!hasCatalog) return true;
+    if (!state.rootStatus.isSuccess) return false;
+    if (state.programs.every((p) => p.id != state.draft.programId)) {
+      return false;
+    }
+    if (state.stages.every((s) => s.id != state.draft.stageId)) return false;
+    if (!state.gradesStatus.isSuccess) return false;
+    if (state.grades.every((g) => g.id != state.draft.gradeId)) return false;
+    if (!state.tracksStatus.isSuccess) return false;
+    if (state.tracks.isNotEmpty) {
+      if (state.tracks.every((t) => t.id != state.draft.trackId)) return false;
+    } else if (state.draft.trackId != null) {
+      return false;
+    }
+    if (!state.areasStatus.isSuccess) return false;
+    final area = state.areas.where((a) => a.id == state.draft.areaId).firstOrNull;
+    if (area == null || area.governorateId != state.draft.governorateId) {
+      return false;
+    }
+    return true;
   }
 
   /// Validates the credentials step and, when valid, checks availability.
@@ -441,7 +640,7 @@ class RegistrationCubit extends Cubit<RegistrationState> {
 
   /// Validates the personal-information step and advances when valid.
   Future<void> submitPersonal() async {
-    final issues = validation.personalIssues(state.draft, areas: state.areas);
+    final issues = _personalIssues();
     emit(state.copyWith(personal: issues, clearFailure: true));
     if (!issues.isValid) return;
     emit(state.copyWith(step: RegistrationStep.education));
@@ -449,11 +648,7 @@ class RegistrationCubit extends Cubit<RegistrationState> {
 
   /// Validates the educational step and advances to review when valid.
   Future<void> submitEducation() async {
-    final issues = validation.educationIssues(
-      state.draft,
-      availableTracks: state.tracks,
-      tracksLoaded: state.tracks.isNotEmpty || state.draft.gradeId != null,
-    );
+    final issues = _educationIssues();
     emit(state.copyWith(education: issues, clearFailure: true));
     if (!issues.isValid) return;
     emit(state.copyWith(step: RegistrationStep.review));
@@ -467,15 +662,8 @@ class RegistrationCubit extends Cubit<RegistrationState> {
   Future<void> createAccount() async {
     if (state.submitting) return;
     final credentials = validation.credentialsIssues(state.draft);
-    final personal = validation.personalIssues(
-      state.draft,
-      areas: state.areas,
-    );
-    final education = validation.educationIssues(
-      state.draft,
-      availableTracks: state.tracks,
-      tracksLoaded: state.tracks.isNotEmpty || state.draft.gradeId != null,
-    );
+    final personal = _personalIssues();
+    final education = _educationIssues();
     emit(
       state.copyWith(
         credentials: credentials,
@@ -493,6 +681,14 @@ class RegistrationCubit extends Cubit<RegistrationState> {
       return;
     }
     if (!education.isValid) {
+      emit(state.copyWith(step: RegistrationStep.education));
+      return;
+    }
+    if (!_catalogSelectionsReady()) {
+      if (!personal.isValid) {
+        emit(state.copyWith(step: RegistrationStep.personal));
+        return;
+      }
       emit(state.copyWith(step: RegistrationStep.education));
       return;
     }

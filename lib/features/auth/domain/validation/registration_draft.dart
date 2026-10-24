@@ -133,6 +133,8 @@ CredentialsIssues credentialsIssues(RegistrationDraft draft) {
 PersonalIssues personalIssues(
   RegistrationDraft draft, {
   List<AreaOption>? areas,
+  bool requireCatalogIds = false,
+  CatalogQueryStatus areasStatus = CatalogQueryStatus.idle,
 }) {
   String? validateDate(String value) {
     final match = _datePattern.firstMatch(value.trim());
@@ -146,26 +148,47 @@ PersonalIssues personalIssues(
     return null;
   }
 
-  final hasGovernorate =
-      draft.governorateId != null || draft.governorate.trim().isNotEmpty;
-  final hasArea = draft.areaId != null || draft.area.trim().isNotEmpty;
-
-  final String? governorateIssue =
-      hasGovernorate ? null : 'governorateRequired';
-
+  final String? governorateIssue;
   String? areaIssue;
-  if (!hasArea) {
-    areaIssue = 'areaRequired';
-  } else if (draft.areaId != null && draft.governorateId == null) {
-    areaIssue = 'areaInvalid';
-  } else if (areas != null && draft.areaId != null) {
-    final match = areas.where((a) => a.id == draft.areaId).firstOrNull;
-    if (match == null && areas.isNotEmpty) {
+
+  if (requireCatalogIds) {
+    governorateIssue = draft.governorateId == null
+        ? 'governorateRequired'
+        : null;
+    if (draft.governorateId == null) {
+      areaIssue = 'areaRequired';
+    } else if (areasStatus.isLoading || areasStatus.isIdle) {
+      areaIssue = 'catalogStillLoading';
+    } else if (areasStatus.isFailure) {
+      areaIssue = 'areaUnavailable';
+    } else if (areas == null || areas.isEmpty) {
+      areaIssue = 'areaUnavailable';
+    } else if (draft.areaId == null) {
+      areaIssue = 'areaRequired';
+    } else {
+      final match = areas.where((a) => a.id == draft.areaId).firstOrNull;
+      if (match == null || match.governorateId != draft.governorateId) {
+        areaIssue = 'areaInvalid';
+      }
+    }
+  } else {
+    final hasGovernorate =
+        draft.governorateId != null || draft.governorate.trim().isNotEmpty;
+    final hasArea = draft.areaId != null || draft.area.trim().isNotEmpty;
+    governorateIssue = hasGovernorate ? null : 'governorateRequired';
+    if (!hasArea) {
+      areaIssue = 'areaRequired';
+    } else if (draft.areaId != null && draft.governorateId == null) {
       areaIssue = 'areaInvalid';
-    } else if (match != null &&
-        draft.governorateId != null &&
-        match.governorateId != draft.governorateId) {
-      areaIssue = 'areaInvalid';
+    } else if (areas != null && draft.areaId != null) {
+      final match = areas.where((a) => a.id == draft.areaId).firstOrNull;
+      if (match == null && areas.isNotEmpty) {
+        areaIssue = 'areaInvalid';
+      } else if (match != null &&
+          draft.governorateId != null &&
+          match.governorateId != draft.governorateId) {
+        areaIssue = 'areaInvalid';
+      }
     }
   }
 
@@ -192,9 +215,14 @@ PersonalIssues personalIssues(
 EducationIssues educationIssues(
   RegistrationDraft draft, {
   List<TrackOption>? availableTracks,
+  List<GradeOption>? availableGrades,
   bool tracksLoaded = false,
+  bool requireCatalogIds = false,
+  CatalogQueryStatus gradesStatus = CatalogQueryStatus.idle,
+  CatalogQueryStatus tracksStatus = CatalogQueryStatus.idle,
 }) {
   final usesCatalog =
+      requireCatalogIds ||
       draft.programId != null ||
       draft.stageId != null ||
       draft.gradeId != null ||
@@ -206,11 +234,43 @@ EducationIssues educationIssues(
         draft.programId == null ? 'educationProgramRequired' : null;
     final String? stageIssue =
         draft.stageId == null ? 'educationStageRequired' : null;
-    final String? gradeIssue =
-        draft.gradeId == null ? 'gradeRequired' : null;
+
+    String? gradeIssue;
+    if (draft.gradeId == null) {
+      gradeIssue = 'gradeRequired';
+    } else if (requireCatalogIds &&
+        (gradesStatus.isLoading || gradesStatus.isIdle)) {
+      gradeIssue = 'catalogStillLoading';
+    } else if (requireCatalogIds && gradesStatus.isFailure) {
+      gradeIssue = 'catalogLoadError';
+    } else if (requireCatalogIds &&
+        gradesStatus.isSuccess &&
+        availableGrades != null &&
+        !availableGrades.any((g) => g.id == draft.gradeId)) {
+      gradeIssue = 'gradeInvalid';
+    }
 
     String? trackIssue;
-    if (tracksLoaded && availableTracks != null) {
+    if (requireCatalogIds) {
+      if (draft.gradeId == null) {
+        trackIssue = null;
+      } else if (tracksStatus.isLoading || tracksStatus.isIdle) {
+        trackIssue = 'catalogStillLoading';
+      } else if (tracksStatus.isFailure) {
+        trackIssue = 'tracksLoadError';
+      } else if (tracksStatus.isSuccess) {
+        final tracks = availableTracks ?? const <TrackOption>[];
+        if (tracks.isNotEmpty) {
+          if (draft.trackId == null) {
+            trackIssue = 'trackRequired';
+          } else if (!tracks.any((t) => t.id == draft.trackId)) {
+            trackIssue = 'trackInvalid';
+          }
+        } else if (draft.trackId != null) {
+          trackIssue = 'trackNotAllowed';
+        }
+      }
+    } else if (tracksLoaded && availableTracks != null) {
       if (availableTracks.isNotEmpty) {
         if (draft.trackId == null) {
           trackIssue = 'trackRequired';
@@ -220,7 +280,9 @@ EducationIssues educationIssues(
       } else if (draft.trackId != null) {
         trackIssue = 'trackNotAllowed';
       }
-    } else if (draft.trackId != null && availableTracks != null && availableTracks.isEmpty) {
+    } else if (draft.trackId != null &&
+        availableTracks != null &&
+        availableTracks.isEmpty) {
       trackIssue = 'trackNotAllowed';
     }
 

@@ -1135,6 +1135,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Select an area belonging to this governorate.'**
   String get areaInvalid;
+
+  /// No description provided for @catalogStillLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait until the options finish loading.'**
+  String get catalogStillLoading;
+
+  /// No description provided for @areaUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No areas are available for this governorate. Try again.'**
+  String get areaUnavailable;
+
+  /// No description provided for @tracksLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load tracks. Tap retry.'**
+  String get tracksLoadError;
+
+  /// No description provided for @commonSubjects.
+  ///
+  /// In en, this message translates to:
+  /// **'Grade subjects'**
+  String get commonSubjects;
+
+  /// No description provided for @trackSubjects.
+  ///
+  /// In en, this message translates to:
+  /// **'Track subjects'**
+  String get trackSubjects;
+
+  /// No description provided for @requiredSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get requiredSubject;
+
+  /// No description provided for @optionalSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get optionalSubject;
+
+  /// No description provided for @choiceSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Choice'**
+  String get choiceSubject;
+
+  /// No description provided for @advancedSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get advancedSubject;
+
+  /// No description provided for @noSubjectsAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No subjects listed for this selection.'**
+  String get noSubjectsAvailable;
+
+  /// No description provided for @subjectsLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load subjects. Tap retry.'**
+  String get subjectsLoadError;
 }
 
 class _AppLocalizationsDelegate

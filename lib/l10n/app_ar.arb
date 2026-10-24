@@ -175,5 +175,16 @@
   "retry": "إعادة المحاولة",
   "catalogLoadError": "تعذر تحميل البيانات التعليمية. اضغط لإعادة المحاولة.",
   "noOptionsAvailable": "لا توجد خيارات متاحة",
-  "areaInvalid": "اختر منطقة تابعة لهذه المحافظة."
+  "areaInvalid": "اختر منطقة تابعة لهذه المحافظة.",
+  "catalogStillLoading": "انتظر حتى ينتهي تحميل الخيارات.",
+  "areaUnavailable": "لا توجد مناطق لهذه المحافظة. حاول مرة أخرى.",
+  "tracksLoadError": "تعذر تحميل المسارات. اضغط لإعادة المحاولة.",
+  "commonSubjects": "مواد الصف",
+  "trackSubjects": "مواد المسار",
+  "requiredSubject": "إلزامية",
+  "optionalSubject": "اختيارية",
+  "choiceSubject": "اختيار",
+  "advancedSubject": "متقدمة",
+  "noSubjectsAvailable": "لا توجد مواد لهذا الاختيار.",
+  "subjectsLoadError": "تعذر تحميل المواد. اضغط لإعادة المحاولة."
 }

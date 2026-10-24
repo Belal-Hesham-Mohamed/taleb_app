@@ -57,6 +57,9 @@ class RegistrationDraft {
     this.gradeNumber,
     this.governorateId,
     this.areaId,
+    this.programCode,
+    this.stageCode,
+    this.trackCode,
     this.schoolName = '',
     this.schoolType = '',
   });
@@ -87,6 +90,9 @@ class RegistrationDraft {
       gradeNumber = null,
       governorateId = null,
       areaId = null,
+      programCode = null,
+      stageCode = null,
+      trackCode = null,
       schoolName = '',
       schoolType = '';
 
@@ -135,6 +141,12 @@ class RegistrationDraft {
   /// relationship, so an area from another governorate can never be stored.
   final int? areaId;
 
+  /// Stable catalog codes stored beside the ids for legacy text columns.
+  /// Display labels are never stored here.
+  final String? programCode;
+  final String? stageCode;
+  final String? trackCode;
+
   /// Optional school name. Never required.
   final String schoolName;
   final String schoolType;
@@ -171,11 +183,20 @@ class RegistrationDraft {
       // Legacy text columns, preserved for older rows and clients.
       if (governorate.trim().isNotEmpty) 'governorate': governorate.trim(),
       if (area.trim().isNotEmpty) 'area': area.trim(),
-      if (stage != null) 'education_stage': stage!.name,
+      if (stage != null)
+        'education_stage': stage!.name
+      else if (stageCode != null && stageCode!.trim().isNotEmpty)
+        'education_stage': stageCode!.trim(),
       if (type != null) 'education_type': type!.name,
       if (system != null) 'academic_system': system!.name,
-      if (grade != null) 'grade': grade!.name,
-      if (track != null) 'academic_track': track!.name,
+      if (grade != null)
+        'grade': grade!.name
+      else if (gradeNumber != null)
+        'grade': '$gradeNumber',
+      if (track != null)
+        'academic_track': track!.name
+      else if (trackCode != null && trackCode!.trim().isNotEmpty)
+        'academic_track': trackCode!.trim(),
       // Relational columns: the authoritative references.
       if (programId != null) 'education_program_id': programId,
       if (gradeId != null) 'education_grade_id': gradeId,
@@ -219,6 +240,9 @@ class RegistrationDraft {
     int? gradeNumber,
     int? governorateId,
     int? areaId,
+    String? programCode,
+    String? stageCode,
+    String? trackCode,
     String? schoolName,
     String? schoolType,
     Object? clearGender = _absent,
@@ -233,6 +257,9 @@ class RegistrationDraft {
     Object? clearGradeNumber = _absent,
     Object? clearGovernorateId = _absent,
     Object? clearAreaId = _absent,
+    Object? clearProgramCode = _absent,
+    Object? clearStageCode = _absent,
+    Object? clearTrackCode = _absent,
   }) => RegistrationDraft(
     phone: phone ?? this.phone,
     password: password ?? this.password,
@@ -263,6 +290,11 @@ class RegistrationDraft {
         ? (governorateId ?? this.governorateId)
         : null,
     areaId: clearAreaId == _absent ? (areaId ?? this.areaId) : null,
+    programCode: clearProgramCode == _absent
+        ? (programCode ?? this.programCode)
+        : null,
+    stageCode: clearStageCode == _absent ? (stageCode ?? this.stageCode) : null,
+    trackCode: clearTrackCode == _absent ? (trackCode ?? this.trackCode) : null,
     schoolName: schoolName ?? this.schoolName,
     schoolType: schoolType ?? this.schoolType,
   );
@@ -294,20 +326,25 @@ class RegistrationDraft {
 
   /// Replaces the program and clears the stage, grade, and track ids, which
   /// all depend on it.
-  RegistrationDraft withProgram(int programId) => copyWith(
+  RegistrationDraft withProgram(int programId, {String? code}) => copyWith(
     programId: programId,
+    programCode: code,
     clearStageId: true,
     clearGradeId: true,
     clearTrackId: true,
     clearGradeNumber: true,
+    clearStageCode: true,
+    clearTrackCode: true,
   );
 
   /// Replaces the stage and clears the grade and track ids.
-  RegistrationDraft withStageId(int stageId) => copyWith(
+  RegistrationDraft withStageId(int stageId, {String? code}) => copyWith(
     stageId: stageId,
+    stageCode: code,
     clearGradeId: true,
     clearTrackId: true,
     clearGradeNumber: true,
+    clearTrackCode: true,
   );
 
   /// Replaces the grade and clears the track id.
@@ -319,14 +356,20 @@ class RegistrationDraft {
   );
 
   /// Replaces the track id. Passing null clears it.
-  RegistrationDraft withTrackId(int? trackId) => trackId == null
-      ? copyWith(clearTrackId: true)
-      : copyWith(trackId: trackId);
+  RegistrationDraft withTrackId(int? trackId, {String? code}) => trackId == null
+      ? copyWith(clearTrackId: true, clearTrackCode: true)
+      : copyWith(trackId: trackId, trackCode: code);
 
-  /// Replaces the governorate and clears the area id, which depends on it.
-  RegistrationDraft withGovernorate(int governorateId) =>
-      copyWith(governorateId: governorateId, clearAreaId: true);
+  /// Replaces the governorate and clears the area id and legacy area text.
+  RegistrationDraft withGovernorate(int governorateId, {String? code}) =>
+      copyWith(
+        governorateId: governorateId,
+        governorate: code ?? '',
+        area: '',
+        clearAreaId: true,
+      );
 
   /// Replaces the area id. The governorate is unchanged.
-  RegistrationDraft withArea(int areaId) => copyWith(areaId: areaId);
+  RegistrationDraft withArea(int areaId, {String? code}) =>
+      copyWith(areaId: areaId, area: code ?? '');
 }

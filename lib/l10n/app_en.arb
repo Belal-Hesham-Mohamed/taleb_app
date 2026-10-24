@@ -175,5 +175,16 @@
   "retry": "Retry",
   "catalogLoadError": "Failed to load education options. Tap to retry.",
   "noOptionsAvailable": "No options available",
-  "areaInvalid": "Select an area belonging to this governorate."
+  "areaInvalid": "Select an area belonging to this governorate.",
+  "catalogStillLoading": "Wait until the options finish loading.",
+  "areaUnavailable": "No areas are available for this governorate. Try again.",
+  "tracksLoadError": "Failed to load tracks. Tap retry.",
+  "commonSubjects": "Grade subjects",
+  "trackSubjects": "Track subjects",
+  "requiredSubject": "Required",
+  "optionalSubject": "Optional",
+  "choiceSubject": "Choice",
+  "advancedSubject": "Advanced",
+  "noSubjectsAvailable": "No subjects listed for this selection.",
+  "subjectsLoadError": "Failed to load subjects. Tap retry."
 }

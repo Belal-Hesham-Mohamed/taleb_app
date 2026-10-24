@@ -542,4 +542,37 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get areaInvalid => 'اختر منطقة تابعة لهذه المحافظة.';
+
+  @override
+  String get catalogStillLoading => 'انتظر حتى ينتهي تحميل الخيارات.';
+
+  @override
+  String get areaUnavailable => 'لا توجد مناطق لهذه المحافظة. حاول مرة أخرى.';
+
+  @override
+  String get tracksLoadError => 'تعذر تحميل المسارات. اضغط لإعادة المحاولة.';
+
+  @override
+  String get commonSubjects => 'مواد الصف';
+
+  @override
+  String get trackSubjects => 'مواد المسار';
+
+  @override
+  String get requiredSubject => 'إلزامية';
+
+  @override
+  String get optionalSubject => 'اختيارية';
+
+  @override
+  String get choiceSubject => 'اختيار';
+
+  @override
+  String get advancedSubject => 'متقدمة';
+
+  @override
+  String get noSubjectsAvailable => 'لا توجد مواد لهذا الاختيار.';
+
+  @override
+  String get subjectsLoadError => 'تعذر تحميل المواد. اضغط لإعادة المحاولة.';
 }

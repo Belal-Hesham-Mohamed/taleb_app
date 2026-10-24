@@ -205,6 +205,13 @@ class _CredentialsStepState extends State<_CredentialsStep> {
           onNext: _cubit.checkPhone,
           onPrevious: () => context.pop(),
           children: [
+            if (state.rootStatus.isFailure) ...[
+              _CatalogErrorBanner(
+                message: l10n.catalogLoadError,
+                onRetry: _cubit.loadCatalog,
+              ),
+              const SizedBox(height: 12),
+            ],
             if (state.checkingPhone) ...[
               Row(
                 children: [
@@ -438,24 +445,25 @@ class _PersonalStepState extends State<_PersonalStep> {
               onChanged: _cubit.updateGuardianId,
             ),
             const SizedBox(height: 16),
-            if (state.catalogError) ...[
+            if (state.rootStatus.isFailure || state.areasStatus.isFailure) ...[
               _CatalogErrorBanner(
                 message: l10n.catalogLoadError,
-                onRetry: _cubit.loadCatalog,
+                onRetry: state.rootStatus.isFailure
+                    ? _cubit.loadCatalog
+                    : _cubit.loadAreas,
               ),
               const SizedBox(height: 12),
             ],
             _GovernorateSelector(
               governorates: state.governorates,
-              loading: state.catalogLoading && state.governorates.isEmpty,
+              loading: state.rootStatus.isLoading && state.governorates.isEmpty,
               error: switch (issues.governorate) {
                 'governorateRequired' => l10n.governorateRequired,
                 _ => null,
               },
               selectedId: draft.governorateId,
               onSelected: (gov) {
-                _cubit.selectGovernorate(gov.id);
-                _cubit.updateGovernorate(gov.code ?? gov.nameEn);
+                _cubit.selectGovernorate(gov.id, code: gov.code);
                 _cubit.loadAreas();
               },
             ),
@@ -463,18 +471,17 @@ class _PersonalStepState extends State<_PersonalStep> {
             _AreaSelector(
               areas: state.areas,
               hasGovernorate: draft.governorateId != null,
-              loading: state.catalogLoading &&
-                  state.areas.isEmpty &&
-                  draft.governorateId != null,
+              loading: state.areasStatus.isLoading,
               error: switch (issues.area) {
                 'areaRequired' => l10n.areaRequired,
                 'areaInvalid' => l10n.areaInvalid,
+                'catalogStillLoading' => l10n.catalogStillLoading,
+                'areaUnavailable' => l10n.areaUnavailable,
                 _ => null,
               },
               selectedId: draft.areaId,
               onSelected: (area) {
-                _cubit.selectArea(area.id);
-                _cubit.updateArea(area.code ?? area.nameEn);
+                _cubit.selectArea(area.id, code: area.code);
               },
             ),
           ],

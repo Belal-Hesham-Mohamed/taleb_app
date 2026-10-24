@@ -1,3 +1,18 @@
+/// Outcome of one catalog request. Distinguishes idle, in-flight, success
+/// (including a genuine empty list), and failure so a pending or failed
+/// request is never treated as "nothing applies".
+enum CatalogQueryStatus {
+  idle,
+  loading,
+  success,
+  failure;
+
+  bool get isIdle => this == CatalogQueryStatus.idle;
+  bool get isLoading => this == CatalogQueryStatus.loading;
+  bool get isSuccess => this == CatalogQueryStatus.success;
+  bool get isFailure => this == CatalogQueryStatus.failure;
+}
+
 /// Parses a PostgREST integer that may arrive as a number or a string.
 ///
 /// `bigint` columns can be returned either way depending on the client, and a

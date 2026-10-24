@@ -554,4 +554,38 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get areaInvalid => 'Select an area belonging to this governorate.';
+
+  @override
+  String get catalogStillLoading => 'Wait until the options finish loading.';
+
+  @override
+  String get areaUnavailable =>
+      'No areas are available for this governorate. Try again.';
+
+  @override
+  String get tracksLoadError => 'Failed to load tracks. Tap retry.';
+
+  @override
+  String get commonSubjects => 'Grade subjects';
+
+  @override
+  String get trackSubjects => 'Track subjects';
+
+  @override
+  String get requiredSubject => 'Required';
+
+  @override
+  String get optionalSubject => 'Optional';
+
+  @override
+  String get choiceSubject => 'Choice';
+
+  @override
+  String get advancedSubject => 'Advanced';
+
+  @override
+  String get noSubjectsAvailable => 'No subjects listed for this selection.';
+
+  @override
+  String get subjectsLoadError => 'Failed to load subjects. Tap retry.';
 }
